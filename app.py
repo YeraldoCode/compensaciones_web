@@ -2,15 +2,20 @@ from flask import Flask, render_template, request, jsonify, redirect, url_for, f
 from werkzeug.utils import secure_filename
 import pandas as pd
 import os
+import secrets
 
 app = Flask(__name__)
 
 # Ruta del archivo Excel
 EXCEL_PATH = os.path.join('data', 'Plantilla_compensaciones.xlsx')
 
+# Configuración para la carga de archivos
 UPLOAD_FOLDER = os.path.join('data')
 ALLOWED_EXTENSIONS = {'xlsx'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+# Configuración de la clave secreta para sesiones
+app.secret_key = os.getenv('SECRET_KEY', secrets.token_hex(16))
 
 # Verificar si el archivo tiene una extensión permitida
 def allowed_file(filename):
@@ -81,5 +86,4 @@ def modificar_archivo():
     return render_template('modificar.html')
 
 if __name__ == '__main__':
-    from waitress import serve
-    serve(app, host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
+    app.run(host='0.0.0.0', port=8080, debug=True)
