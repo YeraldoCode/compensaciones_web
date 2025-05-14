@@ -67,11 +67,27 @@
         }
     </script>
 </head>
-<body class="d-flex justify-content-center align-items-center vh-100" onload="solicitarNominaONombre()">
+<body class="d-flex justify-content-center align-items-center vh-100">
     <div class="custom-alert text-center">
         <h1>Bienvenido</h1>
-        <p>Por favor,  Actualiza la web e ingresa tu número de nómina o tu nombre completo para continuar.</p>
-        <p class="text-danger">{{ error }}</p>
+        <p>Por favor,  Desliza hacia arriba  e ingresa tu número de nómina o tu nombre completo para continuar.</p>
+        <p class="text-danger" id="error-msg">
+            {{ error }}
+            {% if nomina %}<br><span class="fw-bold">Nómina ingresada: {{ nomina }}</span>{% endif %}
+            {% if nombre %}<br><span class="fw-bold">Nombre ingresado: {{ nombre }}</span>{% endif %}
+        </p>
     </div>
+    <script>
+        // Si hay un error, mostrar alerta y volver a solicitar datos
+        window.onload = function() {
+            var error = document.getElementById('error-msg').textContent.trim();
+            if (error) {
+                alert(error);
+                solicitarNominaONombre();
+            } else {
+                solicitarNominaONombre();
+            }
+        }
+    </script>
 </body>
 </html>

@@ -29,9 +29,22 @@ def login():
 def compensaciones():
     nomina = request.form.get('nomina')
     nombre = request.form.get('nombre')
+    semana = None
+    # Leer la semana de la última actualización
+    ULTIMA_ACTUALIZACION_PATH = os.path.join('data', 'ultima_actualizacion.txt')
+    if os.path.exists(ULTIMA_ACTUALIZACION_PATH):
+        try:
+            with open(ULTIMA_ACTUALIZACION_PATH, 'r', encoding='utf-8') as f:
+                line = f.read().strip()
+                if line:
+                    partes = line.split('|')
+                    if len(partes) == 2:
+                        _, semana = partes
+        except Exception:
+            pass
 
     if not nomina and not nombre:
-        return "Por favor, proporciona un número de nómina o un nombre completo para realizar la búsqueda.", 400
+        return render_template('login_alert.html', error="Por favor, proporciona un número de nómina o un nombre completo para realizar la búsqueda.")
 
     # Leer el archivo Excel
     try:
@@ -40,22 +53,18 @@ def compensaciones():
 
         if nomina:
             try:
-                nomina = int(nomina)
-                fila = df[df['NOMINA'] == nomina]
+                nomina_int = int(nomina)
+                fila = df[df['NOMINA'] == nomina_int]
             except ValueError:
-                return render_template('login_alert.html', error="El número de nómina debe ser un valor numérico.")
+                return render_template('login_alert.html', error="El número de nómina debe ser un valor numérico.", nomina=nomina)
         elif nombre:
             fila = df[df['NOMBRE'].str.contains(nombre, case=False, na=False)]
 
         if fila.empty:
-            return "No se encontraron datos para el número de nómina o el nombre proporcionado.", 404
+            return render_template('login_alert.html', error="No se encontraron datos para el número de nómina o el nombre proporcionado.", nomina=nomina, nombre=nombre)
 
         datos = fila.to_dict(orient='records')[0]
-
-        # Asegurar que la nómina sea un entero
         datos['NOMINA'] = int(datos['NOMINA'])
-
-        # Calcular el total como la suma de los valores numéricos
         total = 0
         for clave, valor in datos.items():
             if isinstance(valor, (int, float)) and clave != 'NOMINA':
@@ -66,24 +75,47 @@ def compensaciones():
     except Exception as e:
         return f"Error al leer el archivo: {str(e)}", 500
 
-    return render_template('compensaciones.html', datos=datos)
+    return render_template('compensaciones.html', datos=datos, semana=semana)
+
+ULTIMA_ACTUALIZACION_PATH = os.path.join('data', 'ultima_actualizacion.txt')
 
 @app.route('/modificar', methods=['GET', 'POST'])
 def modificar_archivo():
+    ultimo_archivo = None
+    ultima_semana = None
+    # Leer última actualización si existe
+    if os.path.exists(ULTIMA_ACTUALIZACION_PATH):
+        try:
+            with open(ULTIMA_ACTUALIZACION_PATH, 'r', encoding='utf-8') as f:
+                line = f.read().strip()
+                if line:
+                    partes = line.split('|')
+                    if len(partes) == 2:
+                        ultimo_archivo, ultima_semana = partes
+        except Exception:
+            pass
     if request.method == 'POST':
         if 'file' not in request.files:
             flash('No se seleccionó ningún archivo')
             return redirect(request.url)
         file = request.files['file']
+        semana = request.form.get('semana')
         if file.filename == '':
             flash('No se seleccionó ningún archivo')
             return redirect(request.url)
+        if not semana:
+            flash('Debes seleccionar una semana')
+            return redirect(request.url)
         if file and allowed_file(file.filename):
             filename = secure_filename(file.filename)
+            # Guardar el archivo con el nombre estándar
             file.save(os.path.join(app.config['UPLOAD_FOLDER'], 'Plantilla_compensaciones.xlsx'))
+            # Guardar la información de la última actualización
+            with open(ULTIMA_ACTUALIZACION_PATH, 'w', encoding='utf-8') as f:
+                f.write(f"{filename}|{semana}")
             flash('Archivo actualizado correctamente')
             return redirect(url_for('modificar_archivo'))
-    return render_template('modificar.html')
+    return render_template('modificar.html', ultimo_archivo=ultimo_archivo, ultima_semana=ultima_semana)
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080, debug=True)
