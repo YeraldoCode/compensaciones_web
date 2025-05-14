@@ -17,6 +17,16 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 # Configuración de la clave secreta para sesiones
 app.secret_key = os.getenv('SECRET_KEY', secrets.token_hex(16))
 
+# Variable global para almacenar el DataFrame en memoria
+compensaciones_df = None
+
+def cargar_excel():
+    global compensaciones_df
+    compensaciones_df = pd.read_excel(EXCEL_PATH, sheet_name='COMPENSACIONES').fillna('')
+
+# Cargar el Excel al iniciar la app
+cargar_excel()
+
 # Verificar si el archivo tiene una extensión permitida
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -46,10 +56,8 @@ def compensaciones():
     if not nomina and not nombre:
         return render_template('login_alert.html', error="Por favor, proporciona un número de nómina o un nombre completo para realizar la búsqueda.")
 
-    # Leer el archivo Excel
     try:
-        df = pd.read_excel(EXCEL_PATH, sheet_name='COMPENSACIONES')
-        df = df.fillna('')
+        df = compensaciones_df  # Usar el DataFrame en memoria
 
         if nomina:
             try:
@@ -114,6 +122,8 @@ def modificar_archivo():
             with open(ULTIMA_ACTUALIZACION_PATH, 'w', encoding='utf-8') as f:
                 f.write(f"{filename}|{semana}")
             flash('Archivo actualizado correctamente')
+            # Recargar el Excel en memoria
+            cargar_excel()
             return redirect(url_for('modificar_archivo'))
     return render_template('modificar.html', ultimo_archivo=ultimo_archivo, ultima_semana=ultima_semana)
 
