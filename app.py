@@ -128,4 +128,8 @@ def modificar_archivo():
     return render_template('modificar.html', ultimo_archivo=ultimo_archivo, ultima_semana=ultima_semana)
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8080, debug=True)
+    if os.getenv('FLASK_ENV') == 'production':
+        from waitress import serve
+        serve(app, host='0.0.0.0', port=8080)
+    else:
+        app.run(host='0.0.0.0', port=8080, debug=True)
