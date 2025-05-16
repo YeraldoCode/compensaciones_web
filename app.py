@@ -39,8 +39,8 @@ def login():
 def compensaciones():
     nomina = request.form.get('nomina')
     nombre = request.form.get('nombre')
-    semana = None
     # Leer la semana de la última actualización
+    semana = None
     ULTIMA_ACTUALIZACION_PATH = os.path.join('data', 'ultima_actualizacion.txt')
     if os.path.exists(ULTIMA_ACTUALIZACION_PATH):
         try:
@@ -51,7 +51,7 @@ def compensaciones():
                     if len(partes) == 2:
                         _, semana = partes
         except Exception:
-            pass
+            semana = None
 
     if not nomina and not nombre:
         return render_template('login_alert.html', error="Por favor, proporciona un número de nómina o un nombre completo para realizar la búsqueda.")
