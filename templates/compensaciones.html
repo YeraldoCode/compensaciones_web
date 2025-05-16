@@ -63,7 +63,80 @@
                 </table>
             </div>
         </div>
-        
+                <!-- Sección dinámica: Detalle de Nómina -->
+        {% if nomina %}
+        <div class="table-container">
+            <h2 class="text-center mb-3">Detalle de Nómina</h2>
+
+            <div class="row">
+                <!-- Columna de Percepciones -->
+                <div class="col-md-6">
+                    <table class="table table-bordered">
+                        <thead class="table-success text-center">
+                            <tr>
+                                <th colspan="2">PERCEPCIONES</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for concepto, monto in nomina.percepciones.items() %}
+                            <tr>
+                                <td>{{ concepto }}</td>
+                                <td class="text-end">${{ '{:,.2f}'.format(monto) if monto else '-' }}</td>
+                            </tr>
+                            {% endfor %}
+                            <tr class="table-success fw-bold">
+                                <td>Total Percepciones</td>
+                                <td class="text-end">${{ '{:,.2f}'.format(nomina.total_percepciones) }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>  
+
+        <!-- Columna de Deducciones -->
+            <div class="col-md-6">
+                <table class="table table-bordered">
+                    <thead class="table-danger text-center">
+                        <tr>
+                            <th colspan="2">DEDUCCIONES</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for concepto, monto in nomina.deducciones.items() %}
+                        <tr>
+                            <td>{{ concepto }}</td>
+                            <td class="text-end">${{ '{:,.2f}'.format(monto) if monto else '-' }}</td>
+                        </tr>
+                        {% endfor %}
+                        <tr class="table-danger fw-bold">
+                            <td>Total Deducciones</td>
+                            <td class="text-end">${{ '{:,.2f}'.format(nomina.total_deducciones) }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Neto a pagar -->
+        <div class="row mt-4">
+            <div class="col-md-12">
+                <table class="table table-bordered text-center">
+                    <thead class="table-info">
+                        <tr class="table-warning">
+                            <th colspan="2">NETO A PAGAR</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="fw-bold fs-5 font-warning">
+                            <td class="text-start">$</td>
+                            <td class="text-end text-success">${{ '{:,.2f}'.format(nomina.neto_a_pagar) }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
         <div class="text-center mt-4">
             <a href="/" class="btn btn-primary">Volver</a>
         </div>
