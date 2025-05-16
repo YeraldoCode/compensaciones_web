@@ -7,7 +7,7 @@ import secrets
 app = Flask(__name__)
 
 # Ruta del archivo Excel
-EXCEL_PATH = os.path.join('data', 'Plantilla_compensaciones.xlsx')
+EXCEL_PATH = os.path.join('data', 'PLANTILLA_DESGLOSE.xlsx')
 
 # Configuración para la carga de archivos
 UPLOAD_FOLDER = os.path.join('data')
@@ -22,7 +22,7 @@ compensaciones_df = None
 
 def cargar_excel():
     global compensaciones_df
-    compensaciones_df = pd.read_excel(EXCEL_PATH, sheet_name='COMPENSACIONES').fillna('')
+    compensaciones_df = pd.read_excel(EXCEL_PATH, sheet_name='BD_COMPENSACIONES').fillna('')
 
 # Cargar el Excel al iniciar la app
 cargar_excel()
