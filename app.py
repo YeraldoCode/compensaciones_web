@@ -201,12 +201,11 @@ def modificar_archivo():
             flash('Debes seleccionar una semana')
             return redirect(request.url)
         if file and allowed_file(file.filename):
-            filename = secure_filename(file.filename)
-            # Guardar el archivo con el nombre estándar
-            file.save(os.path.join(app.config['UPLOAD_FOLDER'], 'Plantilla_compensaciones.xlsx'))
+            # Guardar SIEMPRE con el nombre que usa el backend para leer
+            file.save(os.path.join(app.config['UPLOAD_FOLDER'], 'PLANTILLA_DESGLOSE.xlsx'))
             # Guardar la información de la última actualización
             with open(ULTIMA_ACTUALIZACION_PATH, 'w', encoding='utf-8') as f:
-                f.write(f"{filename}|{semana}")
+                f.write(f"PLANTILLA_DESGLOSE.xlsx|{semana}")
             flash('Archivo actualizado correctamente')
             # Recargar el Excel en memoria
             cargar_excel()
