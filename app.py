@@ -3,6 +3,7 @@ from werkzeug.utils import secure_filename
 import pandas as pd
 import os
 import secrets
+from datetime import datetime
 
 app = Flask(__name__)
 
@@ -23,9 +24,30 @@ nomina_desglose_df = None
 
 def cargar_excel():
     global compensaciones_df, nomina_desglose_df
+    # Leer el archivo más reciente desde ultima_actualizacion.txt
+    ULTIMA_ACTUALIZACION_PATH = os.path.join('data', 'ultima_actualizacion.txt')
+    if os.path.exists(ULTIMA_ACTUALIZACION_PATH):
+        try:
+            with open(ULTIMA_ACTUALIZACION_PATH, 'r', encoding='utf-8') as f:
+                line = f.read().strip()
+                if line:
+                    partes = line.split('|')
+                    if len(partes) == 2:
+                        archivo_reciente, _ = partes
+                        excel_path = os.path.join('data', archivo_reciente)
+                        if os.path.exists(excel_path):
+                            compensaciones_df = pd.read_excel(excel_path, sheet_name='BD_COMPENSACIONES').fillna('')
+                            try:
+                                nomina_desglose_df = pd.read_excel(excel_path, sheet_name='BD').fillna('')
+                            except Exception:
+                                nomina_desglose_df = None
+                            return
+        except Exception:
+            pass
+    # Fallback: cargar el archivo por defecto si no se encuentra el más reciente
     compensaciones_df = pd.read_excel(EXCEL_PATH, sheet_name='BD_COMPENSACIONES').fillna('')
     try:
-        nomina_desglose_df = pd.read_excel(EXCEL_PATH, sheet_name='DESGLOSE').fillna('')
+        nomina_desglose_df = pd.read_excel(EXCEL_PATH, sheet_name='BD').fillna('')
     except Exception:
         nomina_desglose_df = None
 
@@ -99,64 +121,135 @@ def compensaciones():
                 # Mapeo de columnas a nombres amigables para mostrar en la tabla
                 mapeo_percepciones = {
                     'SUELDO': 'SUELDO',
+                    'P. PUNTUALIDAD': 'PUNTUALIDAD',
+                    'P. ASISTENCIA': 'ASISTENCIA',
                     'VALES DESPENSA': 'VALES DE DESPENSA',
-                    'VACACIONES': 'VACACIONES',
-                    'PRIMA VAC.': 'PRIMA VACACIONAL',
                     'SUELDO ADEUDADO': 'SUELDO ADEUDADO',
+                    'VACACIONES': 'VACACIONES',
+                    'dias de prima vacacional': 'PRIMA VACACIONAL',
                     'PRIMA DOMINICAL': 'PRIMA DOMINICAL',
-                    'FEST DESC LABOR': 'FESTIVO LABORADO',
                     'DOMINGO LABORAD': 'DOMINGO LABORADO',
+                    'DOMINGOS LAB 2': 'DOMINGOS LAB. ADIC.',
+                    'FEST DESC LABOR': 'FESTIVO LABORADO',
+                    'FESTIVO 2': 'FESTIVO ADICIONAL',
                     'VIAJES ADICIONA': 'VIAJES ADICIONALES',
                     'SERVICIOS ESPEC': 'SERVICIOS ESPECIALES',
                     'SERVICIOS FIJOS': 'SERVICIOS FIJOS',
+                    'COMISIONES': 'COMISIONES',
+                    'BONOS': 'BONOS',
                     'BONO DE RENDIMI': 'BONO RENDIMIENTO',
-                    'COMPENSACION': 'COMPENSACION',
+                    'COMPENSACION': 'COMPENSACIÓN',
                     'BONO DESEMPEÑO': 'BONO DESEMPEÑO',
                     'AYUDA FUNERARIA': 'AYUDA FUNERARIA',
                     'AYUDA ESCOLAR': 'AYUDA ESCOLAR',
-                    'TOTAL PERCEP': 'TOTAL PERCEPCIONES',
+                    'AGUINALDO': 'AGUINALDO',
+                    'P.T.U.': 'PTU'
                 }
                 mapeo_deducciones = {
-                    'FALTAS': 'FALTAS o PERMISOS SIN GOCE',
+                    'FALTAS': 'FALTAS/PERMISOS',
                     'I.S.P.T.': 'ISPT',
-                    'I.M.S.S.': 'IMSS',
+                    'afiliacion al i.m.s.s.': 'IMSS',
                     'CUOTA SINDICAL': 'CUOTA SINDICAL',
                     'DESC. INFONAVIT': 'INFONAVIT',
                     'SEG.DAÑOS VIV': 'SEGURO INFONAVIT',
-                    'DIF. INFONAVIT': 'DIF INFONAVIT',
-                    'PENSION ALIMENT': 'PENSION ALIMENTICIA',
+                    'DIF. INFONAVIT': 'DIF. INFONAVIT',
+                    'PENSION ALIMENT': 'PENSIÓN ALIMENTICIA',
                     'DESCTO. FONACOT': 'FONACOT',
-                    'PRESTAMO PERSON': 'PRESTAMO PERSONAL',
-                    'ANOMALIAS': 'ANOMALIAS',
+                    'PRESTAMO PERSON': 'PRÉSTAMO PERSONAL',
+                    'ANOMALIAS': 'ANOMALÍAS',
                     'COMBUSTIBLE': 'COMBUSTIBLE',
-                    'TELEFONIA': 'TELEFONIA',
+                    'TELEFONIA': 'TELEFONÍA',
                     'SINIESTROS': 'SINIESTROS',
-                    'PRESTAMO DE LIC': 'PRESTAMO LICENCIA',
-                    'DESC. DE LENTES': 'DESC. DE LENTES',
-                    'TAXIS': 'TAXIS',
+                    'DESC. DE LENTES': 'LENTES',
+                    'PRESTAMO DE LIC': 'PRÉSTAMO LICENCIA',
                     'REP. TARJETA': 'REP. TARJETA',
-                    'TOTAL DEDUCC': 'TOTAL DEDUCCIONES',
+                    'INC. ENFERMEDAD': 'INCAP. ENFERMEDAD',
+                    'INC. ACCIDENTE': 'INCAP. ACCIDENTE',
+                    'TAXIS': 'GASTOS DE TRANSPORTE',
+                    'TOTAL DEDUCC': 'TOTAL DEDUCCIONES'
                 }
                 percepciones = {}
                 deducciones = {}
                 total_percepciones = 0
                 total_deducciones = 0
                 for col, nombre in mapeo_percepciones.items():
-                    if col in fila_desglose:
-                        valor = fila_desglose[col]
-                        if col == 'TOTAL PERCEP':
-                            total_percepciones = valor
-                        if isinstance(valor, (int, float)):
-                            percepciones[nombre] = valor
+                    valor = 0.0
+                    try:
+                        v = fila_desglose[col] if col in fila_desglose and pd.notnull(fila_desglose[col]) else 0.0
+                        if v is None or v == '' or str(v).lower() == 'nan':
+                            valor = 0.0
+                        elif isinstance(v, (int, float)):
+                            valor = float(v)
+                        elif isinstance(v, str):
+                            v_clean = v.replace(',', '').replace('$', '').replace(' ', '')
+                            valor = float(v_clean) if v_clean.replace('.', '', 1).replace('-', '', 1).isdigit() else 0.0
+                        else:
+                            valor = 0.0
+                    except Exception:
+                        valor = 0.0
+                    # Forzar a float siempre y evitar Undefined
+                    if valor is None or not isinstance(valor, (int, float)) or pd.isna(valor):
+                        valor = 0.0
+                    percepciones[nombre] = float(valor)
+                # Asegura que todos los conceptos estén presentes y sean float
+                for nombre in mapeo_percepciones.values():
+                    try:
+                        val = percepciones.get(nombre, 0.0)
+                        if val is None or not isinstance(val, (int, float)) or pd.isna(val):
+                            percepciones[nombre] = 0.0
+                        else:
+                            percepciones[nombre] = float(val)
+                    except Exception:
+                        percepciones[nombre] = 0.0
+                total_percepciones = sum(percepciones.values())
                 for col, nombre in mapeo_deducciones.items():
-                    if col in fila_desglose:
-                        valor = fila_desglose[col]
-                        if col == 'TOTAL DEDUCC':
-                            total_deducciones = valor
-                        if isinstance(valor, (int, float)):
-                            deducciones[nombre] = valor
-                if 'NETO A PAGAR' in fila_desglose:
-                    neto_a_pagar = fila_desglose['NETO A PAGAR']
+                    valor = 0.0
+                    try:
+                        v = fila_desglose[col] if col in fila_desglose and pd.notnull(fila_desglose[col]) else 0.0
+                        if v is None or v == '' or str(v).lower() == 'nan':
+                            valor = 0.0
+                        elif col == 'TOTAL DEDUCC':
+                            total_deducciones = float(v) if isinstance(v, (int, float)) else 0.0
+                        if isinstance(v, (int, float)):
+                            valor = float(v)
+                        elif isinstance(v, str):
+                            v_clean = v.replace(',', '').replace('$', '').replace(' ', '')
+                            valor = float(v_clean) if v_clean.replace('.', '', 1).replace('-', '', 1).isdigit() else 0.0
+                        else:
+                            valor = 0.0
+                    except Exception:
+                        valor = 0.0
+                    if valor is None or not isinstance(valor, (int, float)) or pd.isna(valor):
+                        valor = 0.0
+                    deducciones[nombre] = float(valor)
+                # Asegura que todos los conceptos de deducción estén presentes y sean float
+                for nombre in mapeo_deducciones.values():
+                    try:
+                        val = deducciones.get(nombre, 0.0)
+                        if val is None or not isinstance(val, (int, float)) or pd.isna(val):
+                            deducciones[nombre] = 0.0
+                        else:
+                            deducciones[nombre] = float(val)
+                    except Exception:
+                        deducciones[nombre] = 0.0
+                if not total_deducciones:
+                    total_deducciones = sum(deducciones.values())
+                if 'NETO A PAGAR' in fila_desglose and pd.notnull(fila_desglose['NETO A PAGAR']):
+                    v = fila_desglose['NETO A PAGAR']
+                    try:
+                        if v is None or v == '' or str(v).lower() == 'nan':
+                            neto_a_pagar = 0.0
+                        elif isinstance(v, (int, float)):
+                            neto_a_pagar = float(v)
+                        elif isinstance(v, str):
+                            v_clean = v.replace(',', '').replace('$', '').replace(' ', '')
+                            neto_a_pagar = float(v_clean) if v_clean.replace('.', '', 1).replace('-', '', 1).isdigit() else 0.0
+                        else:
+                            neto_a_pagar = 0.0
+                    except Exception:
+                        neto_a_pagar = 0.0
+                    if neto_a_pagar is None or not isinstance(neto_a_pagar, (int, float)) or pd.isna(neto_a_pagar):
+                        neto_a_pagar = 0.0
                 else:
                     neto_a_pagar = total_percepciones - total_deducciones
                 nomina_obj = type('Nomina', (), {})()
@@ -169,7 +262,7 @@ def compensaciones():
             nomina_obj = None
     except Exception as e:
         return f"Error al leer el archivo: {str(e)}", 500
-    return render_template('compensaciones.html', datos=datos, semana=semana, nomina=nomina_obj)
+    return render_template('compensaciones.html', datos=datos, semana=semana, nomina=nomina_obj, now=datetime.now())
 
 ULTIMA_ACTUALIZACION_PATH = os.path.join('data', 'ultima_actualizacion.txt')
 
@@ -201,11 +294,16 @@ def modificar_archivo():
             flash('Debes seleccionar una semana')
             return redirect(request.url)
         if file and allowed_file(file.filename):
-            # Guardar SIEMPRE con el nombre que usa el backend para leer
+            # Guardar el archivo con nombre único por semana
+            unique_filename = f"PLANTILLA_DESGLOSE_SEMANA_{semana}.xlsx"
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
+            file.save(file_path)
+            # Sobrescribir el archivo principal para que siempre se lea el último
+            file.seek(0)
             file.save(os.path.join(app.config['UPLOAD_FOLDER'], 'PLANTILLA_DESGLOSE.xlsx'))
             # Guardar la información de la última actualización
             with open(ULTIMA_ACTUALIZACION_PATH, 'w', encoding='utf-8') as f:
-                f.write(f"PLANTILLA_DESGLOSE.xlsx|{semana}")
+                f.write(f"{unique_filename}|{semana}")
             flash('Archivo actualizado correctamente')
             # Recargar el Excel en memoria
             cargar_excel()
