@@ -88,7 +88,12 @@ def procesar_valor(valor):
             v_clean = valor.replace(',', '').replace('$', '').replace(' ', '')
             # Verificar si es un número válido
             if v_clean.replace('.', '', 1).replace('-', '', 1).isdigit():
-                return float(v_clean)
+                # Asegurarse de que el valor no sea demasiado grande
+                valor_float = float(v_clean)
+                if valor_float > 1000000:  # Si el valor es mayor a 1 millón, probablemente hay un error
+                    print(f"Valor sospechosamente grande: {valor_float} (original: {valor})")
+                    return 0.0
+                return valor_float
             return 0.0
         return 0.0
     except Exception as e:
@@ -111,6 +116,9 @@ def cargar_datos_excel(file_path, semana):
         
         print(f"Registros en BD_COMPENSACIONES: {len(df_compensaciones)}")  # Debug log
         print(f"Registros en BD: {len(df_nomina)}")  # Debug log
+        
+        # Debug: Mostrar columnas disponibles
+        print("Columnas en BD:", df_nomina.columns.tolist())
         
         with get_db_connection() as conn:
             cursor = conn.cursor()
@@ -143,6 +151,10 @@ def cargar_datos_excel(file_path, semana):
                 nomina = str(row['clave.']).strip()
                 nombre = str(row['nombre completo.']).strip()
                 
+                # Debug: Mostrar valores de IMSS
+                if 'I.M.S.S.' in row:
+                    print(f"IMSS raw value for {nomina} ({nombre}): {row['I.M.S.S.']}")
+                
                 # Procesar percepciones
                 for col, nombre_concepto in PERCEPCIONES_MAP.items():
                     if col in row:
@@ -159,7 +171,7 @@ def cargar_datos_excel(file_path, semana):
                     if col in row:
                         valor = procesar_valor(row[col])
                         if nombre_concepto == 'IMSS':  # Log específico para IMSS
-                            print(f"IMSS para {nomina} ({nombre}): {valor}")
+                            print(f"IMSS processed value for {nomina} ({nombre}): {valor}")
                         if valor != 0:
                             cursor.execute('''
                                 INSERT INTO nomina (nomina, nombre, concepto, valor, tipo, semana)
@@ -179,6 +191,16 @@ def cargar_datos_excel(file_path, semana):
             
             print(f"Total de compensaciones en la base de datos para la semana {semana}: {total_compensaciones}")
             print(f"Total de registros de nómina en la base de datos para la semana {semana}: {total_nomina}")
+            
+            # Verificar valores específicos
+            cursor.execute("""
+                SELECT concepto, valor 
+                FROM nomina 
+                WHERE nomina = ? AND semana = ? AND concepto = 'IMSS'
+            """, ('19102470', semana))
+            imss_row = cursor.fetchone()
+            if imss_row:
+                print(f"IMSS en base de datos para 19102470: {imss_row['valor']}")
             
             return True
     except Exception as e:
@@ -216,6 +238,11 @@ def compensaciones():
         with get_db_connection() as conn:
             cursor = conn.cursor()
             
+            # Buscar en ambas tablas
+            empleado = None
+            datos = {}
+            nomina_obj = None
+            
             # Buscar en compensaciones
             if nomina:
                 cursor.execute('''
@@ -230,81 +257,108 @@ def compensaciones():
                     WHERE nombre LIKE ? AND semana = ?
                 ''', (f'%{nombre.strip()}%', semana))
             
-            empleado = cursor.fetchone()
+            empleado_comp = cursor.fetchone()
+            
+            # Buscar en nómina
+            if nomina:
+                cursor.execute('''
+                    SELECT DISTINCT nomina, nombre 
+                    FROM nomina 
+                    WHERE nomina = ? AND semana = ?
+                ''', (nomina.strip(), semana))
+            else:
+                cursor.execute('''
+                    SELECT DISTINCT nomina, nombre 
+                    FROM nomina 
+                    WHERE nombre LIKE ? AND semana = ?
+                ''', (f'%{nombre.strip()}%', semana))
+            
+            empleado_nom = cursor.fetchone()
+            
+            # Usar cualquiera de los dos resultados si existe
+            empleado = empleado_comp or empleado_nom
+            
             if not empleado:
                 return render_template('login_alert.html', 
                                     error="No se encontraron datos para el número de nómina o el nombre proporcionado.",
                                     nomina=nomina, nombre=nombre)
 
-            # Obtener compensaciones
-            cursor.execute('''
-                SELECT concepto, valor 
-                FROM compensaciones 
-                WHERE nomina = ? AND semana = ?
-            ''', (empleado['nomina'], semana))
-            
-            compensaciones = cursor.fetchall()
-            datos = {
-                'NOMINA': empleado['nomina'],
-                'NOMBRE': empleado['nombre']
-            }
-            
-            total_compensaciones = 0
-            for comp in compensaciones:
-                datos[comp['concepto']] = comp['valor']
-                total_compensaciones += comp['valor']
-            
-            datos['TOTAL'] = f"${total_compensaciones:,.2f}"
+            # Obtener compensaciones si existen
+            if empleado_comp:
+                cursor.execute('''
+                    SELECT concepto, valor 
+                    FROM compensaciones 
+                    WHERE nomina = ? AND semana = ?
+                ''', (empleado['nomina'], semana))
+                
+                compensaciones = cursor.fetchall()
+                datos = {
+                    'NOMINA': empleado['nomina'],
+                    'NOMBRE': empleado['nombre']
+                }
+                
+                total_compensaciones = 0
+                for comp in compensaciones:
+                    datos[comp['concepto']] = comp['valor']
+                    total_compensaciones += comp['valor']
+                
+                datos['TOTAL'] = f"${total_compensaciones:,.2f}"
 
-            # Obtener nómina
-            nomina_obj = None
-            percepciones = {}
-            deducciones = {}
-            total_percepciones = 0
-            total_deducciones = 0
+            # Obtener nómina si existe
+            if empleado_nom:
+                percepciones = {}
+                deducciones = {}
+                total_percepciones = 0
+                total_deducciones = 0
 
-            # Obtener percepciones
-            cursor.execute('''
-                SELECT concepto, valor 
-                FROM nomina 
-                WHERE nomina = ? AND semana = ? AND tipo = 'PERCEPCION'
-            ''', (empleado['nomina'], semana))
-            
-            for row in cursor.fetchall():
-                percepciones[row['concepto']] = row['valor']
-                total_percepciones += row['valor']
+                # Obtener percepciones
+                cursor.execute('''
+                    SELECT concepto, valor 
+                    FROM nomina 
+                    WHERE nomina = ? AND semana = ? AND tipo = 'PERCEPCION'
+                ''', (empleado['nomina'], semana))
+                
+                for row in cursor.fetchall():
+                    percepciones[row['concepto']] = row['valor']
+                    total_percepciones += row['valor']
 
-            # Obtener deducciones
-            cursor.execute('''
-                SELECT concepto, valor 
-                FROM nomina 
-                WHERE nomina = ? AND semana = ? AND tipo = 'DEDUCCION'
-            ''', (empleado['nomina'], semana))
-            
-            for row in cursor.fetchall():
-                deducciones[row['concepto']] = row['valor']
-                total_deducciones += row['valor']
+                # Obtener deducciones
+                cursor.execute('''
+                    SELECT concepto, valor 
+                    FROM nomina 
+                    WHERE nomina = ? AND semana = ? AND tipo = 'DEDUCCION'
+                ''', (empleado['nomina'], semana))
+                
+                for row in cursor.fetchall():
+                    deducciones[row['concepto']] = row['valor']
+                    total_deducciones += row['valor']
 
-            # Crear objeto de nómina si hay datos
-            if percepciones or deducciones:
-                nomina_obj = type('Nomina', (), {})()
-                if percepciones:
-                    nomina_obj.percepciones = percepciones
-                    nomina_obj.total_percepciones = total_percepciones
-                if deducciones:
-                    nomina_obj.deducciones = deducciones
-                    nomina_obj.total_deducciones = total_deducciones
-                nomina_obj.neto_a_pagar = total_percepciones - total_deducciones
+                # Crear objeto de nómina si hay datos
+                if percepciones or deducciones:
+                    nomina_obj = type('Nomina', (), {
+                        'percepciones': percepciones,
+                        'deducciones': deducciones,
+                        'total_percepciones': total_percepciones,
+                        'total_deducciones': total_deducciones,
+                        'neto_a_pagar': total_percepciones - total_deducciones
+                    })
 
+            # Si no hay datos en ninguna tabla, mostrar error
+            if not datos and not nomina_obj:
+                return render_template('login_alert.html', 
+                                    error="No se encontraron datos para el número de nómina o el nombre proporcionado.",
+                                    nomina=nomina, nombre=nombre)
+
+            return render_template('compensaciones.html', 
+                                datos=datos if datos else {'NOMINA': empleado['nomina'], 'NOMBRE': empleado['nombre'], 'TOTAL': '$0.00'},
+                                nomina=nomina_obj,
+                                semana=semana,
+                                now=datetime.now())
     except Exception as e:
-        print(f"Error en la ruta compensaciones: {str(e)}")  # Debug log
-        return render_template('login_alert.html', error=f"Error al procesar los datos: {str(e)}")
-
-    return render_template('compensaciones.html', 
-                         datos=datos, 
-                         semana=semana, 
-                         nomina=nomina_obj, 
-                         now=datetime.now())
+        print(f"Error en la búsqueda: {str(e)}")
+        return render_template('login_alert.html', 
+                            error="Ocurrió un error al procesar la solicitud. Por favor, intenta nuevamente.",
+                            nomina=nomina, nombre=nombre)
 
 @app.route('/modificar', methods=['GET', 'POST'])
 def modificar_archivo():
