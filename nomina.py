@@ -22,7 +22,7 @@ def procesar_valor(valor):
 try:
     nomina_desglose_df = pd.read_excel(EXCEL_PATH, sheet_name='BD').fillna('')
     # Filtrar por la nómina específica (puedes cambiar este número)
-    nomina_int = 19119622
+    nomina_int = 19102470
     fila_desglose = nomina_desglose_df[nomina_desglose_df['clave.'] == nomina_int]
     
     if not fila_desglose.empty:

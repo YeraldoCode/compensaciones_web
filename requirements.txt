@@ -1,6 +1,7 @@
-flask
-pandas
-openpyxl
+flask==3.0.0
+pandas==2.1.4
+openpyxl==3.1.2
 gspread
 oauth2client
-waitress
+waitress==3.0.0
+werkzeug==3.0.1

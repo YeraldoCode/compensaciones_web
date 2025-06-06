@@ -33,7 +33,7 @@ PERCEPCIONES_MAP = {
 DEDUCCIONES_MAP = {
     'FALTAS': 'FALTAS o PERMISOS SIN GOCE',
     'I.S.P.T.': 'ISPT',
-    'afiliacion al i.m.s.s.': 'IMSS',
+    'I.M.S.S.': 'IMSS',
     'CUOTA SINDICAL': 'CUOTA SINDICAL',
     'DESC. INFONAVIT': 'INFONAVIT',
     'SEG.DAÑOS VIV': 'SEGURO INFONAVIT',
