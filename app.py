@@ -78,23 +78,30 @@ def init_db():
 
 def procesar_valor(valor):
     """Procesa un valor y lo convierte a float."""
+    print(f"Procesando valor original: {valor} (tipo: {type(valor)})")  # Debug log
     if valor is None or valor == '' or str(valor).lower() == 'nan':
+        print(f"Valor vacío o nulo: {valor}")  # Debug log
         return 0.0
     try:
         if isinstance(valor, (int, float)):
+            print(f"Valor numérico: {valor}")  # Debug log
             return float(valor)
         if isinstance(valor, str):
             # Limpiar el valor de caracteres no numéricos excepto el punto decimal
             v_clean = valor.replace(',', '').replace('$', '').replace(' ', '')
+            print(f"Valor limpio: {v_clean}")  # Debug log
             # Verificar si es un número válido
             if v_clean.replace('.', '', 1).replace('-', '', 1).isdigit():
                 # Asegurarse de que el valor no sea demasiado grande
                 valor_float = float(v_clean)
+                print(f"Valor convertido a float: {valor_float}")  # Debug log
                 if valor_float > 1000000:  # Si el valor es mayor a 1 millón, probablemente hay un error
                     print(f"Valor sospechosamente grande: {valor_float} (original: {valor})")
                     return 0.0
                 return valor_float
+            print(f"Valor no es un número válido: {v_clean}")  # Debug log
             return 0.0
+        print(f"Tipo de valor no manejado: {type(valor)}")  # Debug log
         return 0.0
     except Exception as e:
         print(f"Error procesando valor '{valor}': {str(e)}")
@@ -151,14 +158,18 @@ def cargar_datos_excel(file_path, semana):
                 nomina = str(row['clave.']).strip()
                 nombre = str(row['nombre completo.']).strip()
                 
-                # Debug: Mostrar valores de IMSS
-                if 'I.M.S.S.' in row:
-                    print(f"IMSS raw value for {nomina} ({nombre}): {row['I.M.S.S.']}")
+                # Debug: Mostrar valores específicos
+                if 'PRIMA DOMINICAL' in row:
+                    print(f"PRIMA DOMINICAL raw value for {nomina} ({nombre}): {row['PRIMA DOMINICAL']}")
+                if 'DOMINGO LABORAD' in row:
+                    print(f"DOMINGO LABORADO raw value for {nomina} ({nombre}): {row['DOMINGO LABORAD']}")
                 
                 # Procesar percepciones
                 for col, nombre_concepto in PERCEPCIONES_MAP.items():
                     if col in row:
                         valor = procesar_valor(row[col])
+                        if col in ['PRIMA DOMINICAL', 'DOMINGO LABORAD']:
+                            print(f"Procesando {col} para {nomina}: valor original={row[col]}, valor procesado={valor}")
                         if valor != 0:
                             cursor.execute('''
                                 INSERT INTO nomina (nomina, nombre, concepto, valor, tipo, semana)
@@ -196,11 +207,11 @@ def cargar_datos_excel(file_path, semana):
             cursor.execute("""
                 SELECT concepto, valor 
                 FROM nomina 
-                WHERE nomina = ? AND semana = ? AND concepto = 'IMSS'
-            """, ('19102470', semana))
-            imss_row = cursor.fetchone()
-            if imss_row:
-                print(f"IMSS en base de datos para 19102470: {imss_row['valor']}")
+                WHERE nomina = ? AND semana = ? AND concepto IN ('PRIMA DOMINICAL', 'DOMINGO LABORADO')
+            """, ('19103797', semana))
+            rows = cursor.fetchall()
+            for row in rows:
+                print(f"{row['concepto']} en base de datos para 19103797: {row['valor']}")
             
             return True
     except Exception as e:
