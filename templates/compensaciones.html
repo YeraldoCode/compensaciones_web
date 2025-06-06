@@ -1,147 +1,359 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Desglose de Compensaciones</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <title>Compensaciones</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
+        :root {
+            --primary: #1b5e20;
+            --primary-light: #4caf50;
+            --primary-dark: #003300;
+            --background: #ffffff;
+            --surface: #f8f9fa;
+            --text: #2c3e50;
+            --text-light: #6c757d;
+            --border: #e9ecef;
+            --shadow: rgba(0, 0, 0, 0.05);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
         body {
-            background-color: #2e7d32; /* Verde oscuro */
-            color:#2e7d32;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--surface);
+            color: var(--text);
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
         }
-        .table-container {
-            background-color: #ffffff;
-            color: #2e7d32;
-            border-radius: 10px;
-            padding: 20px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 2rem 1rem;
         }
-        .table th {
-            background-color: #1b5e20; /* Verde más oscuro */
-            color: #ffffff;
+
+        .header {
+            text-align: center;
+            margin-bottom: 3rem;
         }
-        .btn-primary {
-            background-color: #1b5e20;
-            border-color: #1b5e20;
+
+        .header h1 {
+            color: var(--primary);
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
         }
-        .btn-primary:hover {
-            background-color: #2e7d32;
-            border-color: #2e7d32;
+
+        .header p {
+            color: var(--text-light);
+            font-size: 1.1rem;
+        }
+
+        .neto-card {
+            background: var(--primary);
+            color: white;
+            border-radius: 16px;
+            padding: 2.5rem;
+            text-align: center;
+            margin-bottom: 3rem;
+            box-shadow: 0 4px 20px rgba(27, 94, 32, 0.15);
+            transition: transform 0.2s ease;
+        }
+
+        .neto-card:hover {
+            transform: translateY(-2px);
+        }
+
+        .neto-card h2 {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            opacity: 0.9;
+        }
+
+        .neto-value {
+            font-size: 3rem;
+            font-weight: 700;
+            font-family: 'SF Mono', 'Roboto Mono', monospace;
+            letter-spacing: -1px;
+        }
+
+        .section {
+            background: var(--background);
+            border-radius: 16px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 12px var(--shadow);
+        }
+
+        .section-title {
+            color: var(--primary);
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .section-title::before {
+            content: '';
+            display: block;
+            width: 4px;
+            height: 20px;
+            background: var(--primary);
+            border-radius: 2px;
+        }
+
+        .table {
+            margin: 0;
+            border-collapse: separate;
+            border-spacing: 0 0.5rem;
+        }
+
+        .table tr {
+            background: var(--surface);
+            transition: transform 0.2s ease;
+        }
+
+        .table tr:hover {
+            transform: translateX(4px);
+        }
+
+        .table td {
+            padding: 1rem;
+            border: none;
+            vertical-align: middle;
+        }
+
+        .table td:first-child {
+            border-radius: 8px 0 0 8px;
+        }
+
+        .table td:last-child {
+            border-radius: 0 8px 8px 0;
+        }
+
+        .value-cell {
+            font-family: 'SF Mono', 'Roboto Mono', monospace;
+            font-weight: 600;
+            color: var(--primary);
+        }
+
+        .total-row {
+            background: var(--primary) !important;
+            color: white;
+        }
+
+        .total-row .value-cell {
+            color: white;
+        }
+
+        .compensaciones-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .compensacion-item {
+            background: var(--surface);
+            padding: 1.5rem;
+            border-radius: 12px;
+            text-align: center;
+            transition: all 0.2s ease;
+            border: 1px solid var(--border);
+        }
+
+        .compensacion-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px var(--shadow);
+            border-color: var(--primary);
+        }
+
+        .compensacion-label {
+            color: var(--text);
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+        }
+
+        .compensacion-value {
+            color: var(--primary);
+            font-size: 1.4rem;
+            font-weight: 700;
+            font-family: 'SF Mono', 'Roboto Mono', monospace;
+        }
+
+        .total-compensaciones {
+            background: var(--primary);
+            color: white;
+            padding: 1.5rem;
+            border-radius: 12px;
+            text-align: center;
+            margin-top: 1.5rem;
+            box-shadow: 0 4px 12px rgba(27, 94, 32, 0.2);
+        }
+
+        .total-compensaciones .compensacion-label {
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 0.75rem;
+        }
+
+        .total-compensaciones .compensacion-value {
+            color: white;
+            font-size: 1.8rem;
+            font-weight: 700;
+        }
+
+        .footer {
+            text-align: center;
+            padding: 2rem 0;
+            color: var(--text-light);
+            font-size: 0.9rem;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+
+            .header {
+                margin-bottom: 2rem;
+            }
+
+            .header h1 {
+                font-size: 1.5rem;
+            }
+
+            .neto-card {
+                padding: 2rem;
+                margin-bottom: 2rem;
+            }
+
+            .neto-value {
+                font-size: 2.5rem;
+            }
+
+            .section {
+                padding: 1.5rem;
+            }
+
+            .compensaciones-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .table td {
+                padding: 0.75rem;
+            }
+        }
+
+        /* Animaciones */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .section {
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        .neto-card {
+            animation: fadeIn 0.5s ease-out 0.2s backwards;
+        }
+
+        .compensacion-item {
+            animation: fadeIn 0.5s ease-out 0.4s backwards;
         }
     </style>
 </head>
-<body class="bg-light">
-    <div class="container py-5">
-        <div class="table-container">
-            <h1 class="text-center mb-4">
-            Desglose de Compensaciones
-            {% if semana %}
-                <span class="fs-4 text-success">- Semana {{ semana }}</span>
-            {% endif %}
-            </h1>
-            <div class="table-responsive">
-                <table class="table table-bordered table-striped">
-                    <thead>
-                        <tr>
-                            <th>Clave</th>
-                            <th>Valor</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for clave, valor in datos.items() %}
-                        <tr>
-                            <td>{{ clave }}</td>
-                            <td>{{ valor }}</td>
-                        </tr>
-                        {% endfor %}
-                        <tr class="table-info">
-                            <td><strong>Total</strong></td>
-                            <td><strong>{{ datos['TOTAL'] }}</strong></td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Desglose de Nómina</h1>
+            <p>Semana: {{ semana if semana else 'No especificada' }}</p>
         </div>
-        <br>
-        <br>
-                <!-- Sección dinámica: Detalle de Nómina -->
-        {% if nomina %}
-        <div class="table-container">
-            <h2 class="text-center mb-3">Detalle de Nómina</h2>
 
-            <div class="row">
-                <!-- Columna de Percepciones -->
-                <div class="col-md-6">
-                    <table class="table table-bordered">
-                        <thead class="table-success text-center">
-                            <tr>
-                                <th colspan="2">PERCEPCIONES</th>
-                            </tr>
-                        </thead>
+        {% if nomina %}
+        <div class="neto-card">
+            <h2>NETO A PAGAR</h2>
+            <div class="neto-value">${{ "%.2f"|format(nomina.neto_a_pagar) }}</div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-6">
+                <div class="section">
+                    <h2 class="section-title">PERCEPCIONES</h2>
+                    <table class="table">
                         <tbody>
-                            {% for concepto, monto in nomina.percepciones.items() %}
+                            {% for concepto, valor in nomina.percepciones.items() %}
                             <tr>
                                 <td>{{ concepto }}</td>
-                                <td class="text-end">${{ '{:,.2f}'.format(monto) if monto else '-' }}</td>
+                                <td class="text-end value-cell">${{ "{:,.2f}".format(valor|float) }}</td>
                             </tr>
                             {% endfor %}
-                            <tr class="table-success fw-bold">
-                                <td>Total Percepciones</td>
-                                <td class="text-end">${{ '{:,.2f}'.format(nomina.total_percepciones) }}</td>
+                            <tr class="total-row">
+                                <td><strong>TOTAL PERCEPCIONES</strong></td>
+                                <td class="text-end value-cell"><strong>${{ "{:,.2f}".format(nomina.total_percepciones) }}</strong></td>
                             </tr>
                         </tbody>
                     </table>
-                </div>  
+                </div>
+            </div>
 
-        <!-- Columna de Deducciones -->
             <div class="col-md-6">
-                <table class="table table-bordered">
-                    <thead class="table-danger text-center">
-                        <tr>
-                            <th colspan="2">DEDUCCIONES</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for concepto, monto in nomina.deducciones.items() %}
-                        <tr>
-                            <td>{{ concepto }}</td>
-                            <td class="text-end">${{ '{:,.2f}'.format(monto) if monto else '-' }}</td>
-                        </tr>
-                        {% endfor %}
-                        <tr class="table-danger fw-bold">
-                            <td>Total Deducciones</td>
-                            <td class="text-end">${{ '{:,.2f}'.format(nomina.total_deducciones) }}</td>
-                        </tr>
-                    </tbody>
-                </table>
+                <div class="section">
+                    <h2 class="section-title">DEDUCCIONES</h2>
+                    <table class="table">
+                        <tbody>
+                            {% for concepto, valor in nomina.deducciones.items() %}
+                            <tr>
+                                <td>{{ concepto }}</td>
+                                <td class="text-end value-cell">${{ "{:,.2f}".format(valor|float) }}</td>
+                            </tr>
+                            {% endfor %}
+                            <tr class="total-row">
+                                <td><strong>TOTAL DEDUCCIONES</strong></td>
+                                <td class="text-end value-cell"><strong>${{ "{:,.2f}".format(nomina.total_deducciones) }}</strong></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
 
-        <!-- Neto a pagar -->
-        <div class="row mt-4">
-            <div class="col-md-12">
-                <table class="table table-bordered text-center">
-                    <thead class="table-info">
-                        <tr class="table-warning">
-                            <th colspan="2">NETO A PAGAR</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr class="fw-bold fs-5 font-warning">
-                            <td class="text-start">$</td>
-                            <td class="text-end text-success">${{ '{:,.2f}'.format(nomina.neto_a_pagar) }}</td>
-                        </tr>
-                    </tbody>
-                </table>
+        <div class="section">
+            <h2 class="section-title">COMPENSACIONES</h2>
+            <div class="compensaciones-grid">
+                {% for key, value in datos.items() %}
+                    {% if key not in ['NOMINA', 'NOMBRE', 'TOTAL'] %}
+                    <div class="compensacion-item">
+                        <div class="compensacion-label">{{ key }}</div>
+                        <div class="compensacion-value">${{ "{:,.2f}".format(value|float) }}</div>
+                    </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+            <div class="total-compensaciones">
+                <div class="compensacion-label">TOTAL COMPENSACIONES</div>
+                <div class="compensacion-value">{{ datos.TOTAL }}</div>
             </div>
         </div>
-    </div>
-    {% endif %}
+        {% endif %}
 
-        <div class="text-center mt-4">
-            <a href="/" class="btn btn-primary">Volver</a>
+        <div class="footer">
+            <p>Última actualización: {{ now.strftime('%d/%m/%Y %H:%M:%S') }}</p>
         </div>
     </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

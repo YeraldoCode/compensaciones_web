@@ -4,6 +4,7 @@ import pandas as pd
 import os
 import secrets
 from datetime import datetime
+from config import PERCEPCIONES_MAP, DEDUCCIONES_MAP
 
 app = Flask(__name__)
 
@@ -21,6 +22,20 @@ app.secret_key = os.getenv('SECRET_KEY', secrets.token_hex(16))
 # Variable global para almacenar los DataFrames en memoria
 compensaciones_df = None
 nomina_desglose_df = None
+
+def procesar_valor(valor):
+    """Procesa un valor y lo convierte a float."""
+    if valor is None or valor == '' or str(valor).lower() == 'nan':
+        return 0.0
+    try:
+        if isinstance(valor, (int, float)):
+            return float(valor)
+        if isinstance(valor, str):
+            v_clean = valor.replace(',', '').replace('$', '').replace(' ', '')
+            return float(v_clean) if v_clean.replace('.', '', 1).replace('-', '', 1).isdigit() else 0.0
+        return 0.0
+    except Exception:
+        return 0.0
 
 def cargar_excel():
     global compensaciones_df, nomina_desglose_df
@@ -67,6 +82,8 @@ def compensaciones():
     nomina = request.form.get('nomina')
     nombre = request.form.get('nombre')
     semana = None
+    
+    # Obtener semana actual
     ULTIMA_ACTUALIZACION_PATH = os.path.join('data', 'ultima_actualizacion.txt')
     if os.path.exists(ULTIMA_ACTUALIZACION_PATH):
         try:
@@ -78,10 +95,13 @@ def compensaciones():
                         _, semana = partes
         except Exception:
             semana = None
+
     if not nomina and not nombre:
         return render_template('login_alert.html', error="Por favor, proporciona un número de nómina o un nombre completo para realizar la búsqueda.")
+
     try:
-        df = compensaciones_df  # Usar el DataFrame en memoria
+        # Procesar datos de compensaciones
+        df = compensaciones_df
         if nomina:
             try:
                 nomina_int = int(nomina)
@@ -90,179 +110,83 @@ def compensaciones():
                 return render_template('login_alert.html', error="El número de nómina debe ser un valor numérico.", nomina=nomina)
         elif nombre:
             fila = df[df['NOMBRE'].str.contains(nombre, case=False, na=False)]
+
         if fila.empty:
             return render_template('login_alert.html', error="No se encontraron datos para el número de nómina o el nombre proporcionado.", nomina=nomina, nombre=nombre)
+
         datos = fila.to_dict(orient='records')[0]
         datos['NOMINA'] = int(datos['NOMINA'])
-        total = 0
-        for clave, valor in datos.items():
-            if isinstance(valor, (int, float)) and clave != 'NOMINA':
-                total += valor
-                datos[clave] = f"${valor:,.2f}"
+        
+        # Calcular total de compensaciones
+        total = sum(procesar_valor(valor) for clave, valor in datos.items() 
+                   if clave not in ['NOMINA', 'NOMBRE'])
         datos['TOTAL'] = f"${total:,.2f}"
-        # --- Detalle de nómina desde hoja BD ---
+
+        # Procesar datos de nómina
         nomina_obj = None
         try:
-            # Usar DataFrame en memoria si existe
-            global nomina_desglose_df
-            if nomina_desglose_df is None:
-                nomina_desglose_df = pd.read_excel(EXCEL_PATH, sheet_name='BD').fillna('')
             df_desglose = nomina_desglose_df
             if nomina:
-                try:
-                    nomina_int = int(nomina)
-                    fila_desglose = df_desglose[df_desglose['clave.'] == nomina_int]
-                except ValueError:
-                    fila_desglose = None
+                fila_desglose = df_desglose[df_desglose['clave.'] == nomina_int]
             elif nombre:
                 fila_desglose = df_desglose[df_desglose['nombre completo.'].str.contains(nombre, case=False, na=False)]
-            if fila_desglose is not None and not fila_desglose.empty:
+
+            if not fila_desglose.empty:
                 fila_desglose = fila_desglose.iloc[0]
-                # Mapeo de columnas a nombres amigables para mostrar en la tabla
-                mapeo_percepciones = {
-                    'SUELDO': 'SUELDO',
-                    'P. PUNTUALIDAD': 'PUNTUALIDAD',
-                    'P. ASISTENCIA': 'ASISTENCIA',
-                    'VALES DESPENSA': 'VALES DE DESPENSA',
-                    'SUELDO ADEUDADO': 'SUELDO ADEUDADO',
-                    'VACACIONES': 'VACACIONES',
-                    'dias de prima vacacional': 'PRIMA VACACIONAL',
-                    'PRIMA DOMINICAL': 'PRIMA DOMINICAL',
-                    'DOMINGO LABORAD': 'DOMINGO LABORADO',
-                    'DOMINGOS LAB 2': 'DOMINGOS LAB. ADIC.',
-                    'FEST DESC LABOR': 'FESTIVO LABORADO',
-                    'FESTIVO 2': 'FESTIVO ADICIONAL',
-                    'VIAJES ADICIONA': 'VIAJES ADICIONALES',
-                    'SERVICIOS ESPEC': 'SERVICIOS ESPECIALES',
-                    'SERVICIOS FIJOS': 'SERVICIOS FIJOS',
-                    'COMISIONES': 'COMISIONES',
-                    'BONOS': 'BONOS',
-                    'BONO DE RENDIMI': 'BONO RENDIMIENTO',
-                    'COMPENSACION': 'COMPENSACIÓN',
-                    'BONO DESEMPEÑO': 'BONO DESEMPEÑO',
-                    'AYUDA FUNERARIA': 'AYUDA FUNERARIA',
-                    'AYUDA ESCOLAR': 'AYUDA ESCOLAR',
-                    'AGUINALDO': 'AGUINALDO',
-                    'P.T.U.': 'PTU'
-                }
-                mapeo_deducciones = {
-                    'FALTAS': 'FALTAS/PERMISOS',
-                    'I.S.P.T.': 'ISPT',
-                    'afiliacion al i.m.s.s.': 'IMSS',
-                    'CUOTA SINDICAL': 'CUOTA SINDICAL',
-                    'DESC. INFONAVIT': 'INFONAVIT',
-                    'SEG.DAÑOS VIV': 'SEGURO INFONAVIT',
-                    'DIF. INFONAVIT': 'DIF. INFONAVIT',
-                    'PENSION ALIMENT': 'PENSIÓN ALIMENTICIA',
-                    'DESCTO. FONACOT': 'FONACOT',
-                    'PRESTAMO PERSON': 'PRÉSTAMO PERSONAL',
-                    'ANOMALIAS': 'ANOMALÍAS',
-                    'COMBUSTIBLE': 'COMBUSTIBLE',
-                    'TELEFONIA': 'TELEFONÍA',
-                    'SINIESTROS': 'SINIESTROS',
-                    'DESC. DE LENTES': 'LENTES',
-                    'PRESTAMO DE LIC': 'PRÉSTAMO LICENCIA',
-                    'REP. TARJETA': 'REP. TARJETA',
-                    'INC. ENFERMEDAD': 'INCAP. ENFERMEDAD',
-                    'INC. ACCIDENTE': 'INCAP. ACCIDENTE',
-                    'TAXIS': 'GASTOS DE TRANSPORTE',
-                    'TOTAL DEDUCC': 'TOTAL DEDUCCIONES'
-                }
+                
+                # Procesar percepciones usando datos originales
                 percepciones = {}
+                for col, nombre in PERCEPCIONES_MAP.items():
+                    valor = fila_desglose.get(col, 0.0)
+                    percepciones[nombre] = valor
+
+                # Procesar deducciones usando datos originales
                 deducciones = {}
-                total_percepciones = 0
-                total_deducciones = 0
-                for col, nombre in mapeo_percepciones.items():
-                    valor = 0.0
-                    try:
-                        v = fila_desglose[col] if col in fila_desglose and pd.notnull(fila_desglose[col]) else 0.0
-                        if v is None or v == '' or str(v).lower() == 'nan':
-                            valor = 0.0
-                        elif isinstance(v, (int, float)):
-                            valor = float(v)
-                        elif isinstance(v, str):
-                            v_clean = v.replace(',', '').replace('$', '').replace(' ', '')
-                            valor = float(v_clean) if v_clean.replace('.', '', 1).replace('-', '', 1).isdigit() else 0.0
-                        else:
-                            valor = 0.0
-                    except Exception:
-                        valor = 0.0
-                    # Forzar a float siempre y evitar Undefined
-                    if valor is None or not isinstance(valor, (int, float)) or pd.isna(valor):
-                        valor = 0.0
-                    percepciones[nombre] = float(valor)
-                # Asegura que todos los conceptos estén presentes y sean float
-                for nombre in mapeo_percepciones.values():
-                    try:
-                        val = percepciones.get(nombre, 0.0)
-                        if val is None or not isinstance(val, (int, float)) or pd.isna(val):
-                            percepciones[nombre] = 0.0
-                        else:
-                            percepciones[nombre] = float(val)
-                    except Exception:
-                        percepciones[nombre] = 0.0
-                total_percepciones = sum(percepciones.values())
-                for col, nombre in mapeo_deducciones.items():
-                    valor = 0.0
-                    try:
-                        v = fila_desglose[col] if col in fila_desglose and pd.notnull(fila_desglose[col]) else 0.0
-                        if v is None or v == '' or str(v).lower() == 'nan':
-                            valor = 0.0
-                        elif col == 'TOTAL DEDUCC':
-                            total_deducciones = float(v) if isinstance(v, (int, float)) else 0.0
-                        if isinstance(v, (int, float)):
-                            valor = float(v)
-                        elif isinstance(v, str):
-                            v_clean = v.replace(',', '').replace('$', '').replace(' ', '')
-                            valor = float(v_clean) if v_clean.replace('.', '', 1).replace('-', '', 1).isdigit() else 0.0
-                        else:
-                            valor = 0.0
-                    except Exception:
-                        valor = 0.0
-                    if valor is None or not isinstance(valor, (int, float)) or pd.isna(valor):
-                        valor = 0.0
-                    deducciones[nombre] = float(valor)
-                # Asegura que todos los conceptos de deducción estén presentes y sean float
-                for nombre in mapeo_deducciones.values():
-                    try:
-                        val = deducciones.get(nombre, 0.0)
-                        if val is None or not isinstance(val, (int, float)) or pd.isna(val):
-                            deducciones[nombre] = 0.0
-                        else:
-                            deducciones[nombre] = float(val)
-                    except Exception:
-                        deducciones[nombre] = 0.0
-                if not total_deducciones:
-                    total_deducciones = sum(deducciones.values())
-                if 'NETO A PAGAR' in fila_desglose and pd.notnull(fila_desglose['NETO A PAGAR']):
-                    v = fila_desglose['NETO A PAGAR']
-                    try:
-                        if v is None or v == '' or str(v).lower() == 'nan':
-                            neto_a_pagar = 0.0
-                        elif isinstance(v, (int, float)):
-                            neto_a_pagar = float(v)
-                        elif isinstance(v, str):
-                            v_clean = v.replace(',', '').replace('$', '').replace(' ', '')
-                            neto_a_pagar = float(v_clean) if v_clean.replace('.', '', 1).replace('-', '', 1).isdigit() else 0.0
-                        else:
-                            neto_a_pagar = 0.0
-                    except Exception:
-                        neto_a_pagar = 0.0
-                    if neto_a_pagar is None or not isinstance(neto_a_pagar, (int, float)) or pd.isna(neto_a_pagar):
-                        neto_a_pagar = 0.0
-                else:
+                for col, nombre in DEDUCCIONES_MAP.items():
+                    valor = fila_desglose.get(col, 0.0)
+                    deducciones[nombre] = valor
+
+                # Calcular totales usando valores procesados
+                total_percepciones = sum(procesar_valor(valor) for valor in percepciones.values())
+                total_deducciones = sum(procesar_valor(valor) for valor in deducciones.values())
+                
+                # Obtener neto a pagar
+                neto_a_pagar = procesar_valor(fila_desglose.get('NETO A PAGAR', 0.0))
+                if neto_a_pagar == 0.0:
                     neto_a_pagar = total_percepciones - total_deducciones
+
+                # Ordenar percepciones y deducciones según el orden en config.py
+                percepciones_ordenadas = {}
+                for col in PERCEPCIONES_MAP.keys():
+                    nombre = PERCEPCIONES_MAP[col]
+                    if nombre in percepciones:
+                        percepciones_ordenadas[nombre] = percepciones[nombre]
+
+                deducciones_ordenadas = {}
+                for col in DEDUCCIONES_MAP.keys():
+                    nombre = DEDUCCIONES_MAP[col]
+                    if nombre in deducciones:
+                        deducciones_ordenadas[nombre] = deducciones[nombre]
+
                 nomina_obj = type('Nomina', (), {})()
-                nomina_obj.percepciones = percepciones
-                nomina_obj.deducciones = deducciones
+                nomina_obj.percepciones = percepciones_ordenadas
+                nomina_obj.deducciones = deducciones_ordenadas
                 nomina_obj.total_percepciones = total_percepciones
                 nomina_obj.total_deducciones = total_deducciones
                 nomina_obj.neto_a_pagar = neto_a_pagar
-        except Exception:
+
+        except Exception as e:
+            print(f"Error procesando nómina: {str(e)}")
             nomina_obj = None
+
     except Exception as e:
         return f"Error al leer el archivo: {str(e)}", 500
-    return render_template('compensaciones.html', datos=datos, semana=semana, nomina=nomina_obj, now=datetime.now())
+
+    return render_template('compensaciones.html', 
+                         datos=datos, 
+                         semana=semana, 
+                         nomina=nomina_obj, 
+                         now=datetime.now())
 
 ULTIMA_ACTUALIZACION_PATH = os.path.join('data', 'ultima_actualizacion.txt')
 
@@ -285,30 +209,87 @@ def modificar_archivo():
         if 'file' not in request.files:
             flash('No se seleccionó ningún archivo')
             return redirect(request.url)
+        
         file = request.files['file']
         semana = request.form.get('semana')
+        
+        # Validaciones básicas
         if file.filename == '':
             flash('No se seleccionó ningún archivo')
             return redirect(request.url)
         if not semana:
             flash('Debes seleccionar una semana')
             return redirect(request.url)
-        if file and allowed_file(file.filename):
+        if not allowed_file(file.filename):
+            flash('Solo se permiten archivos Excel (.xlsx)')
+            return redirect(request.url)
+            
+        try:
+            # Validar que el archivo sea un Excel válido y tenga las hojas correctas
+            df = pd.read_excel(file, sheet_name=None)
+            required_sheets = ['BD_COMPENSACIONES', 'BD']
+            missing_sheets = [sheet for sheet in required_sheets if sheet not in df]
+            
+            if missing_sheets:
+                flash(f'El archivo debe contener las siguientes hojas: {", ".join(required_sheets)}')
+                return redirect(request.url)
+                
+            # Validar que las hojas tengan datos
+            for sheet in required_sheets:
+                if df[sheet].empty:
+                    flash(f'La hoja {sheet} está vacía')
+                    return redirect(request.url)
+            
             # Guardar el archivo con nombre único por semana
             unique_filename = f"PLANTILLA_DESGLOSE_SEMANA_{semana}.xlsx"
             file_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
+            
+            # Guardar el archivo
+            file.seek(0)
             file.save(file_path)
-            # Sobrescribir el archivo principal para que siempre se lea el último
+            
+            # Sobrescribir el archivo principal
             file.seek(0)
             file.save(os.path.join(app.config['UPLOAD_FOLDER'], 'PLANTILLA_DESGLOSE.xlsx'))
+            
             # Guardar la información de la última actualización
             with open(ULTIMA_ACTUALIZACION_PATH, 'w', encoding='utf-8') as f:
                 f.write(f"{unique_filename}|{semana}")
+                
             flash('Archivo actualizado correctamente')
+            
             # Recargar el Excel en memoria
             cargar_excel()
             return redirect(url_for('modificar_archivo'))
+            
+        except Exception as e:
+            flash(f'Error al procesar el archivo: {str(e)}')
+            return redirect(request.url)
+            
     return render_template('modificar.html', ultimo_archivo=ultimo_archivo, ultima_semana=ultima_semana)
+
+@app.route('/nomina/<int:nomina>', methods=['GET'])
+def obtener_nomina(nomina):
+    try:
+        nomina_desglose_df = pd.read_excel(EXCEL_PATH, sheet_name='BD').fillna('')
+        fila_desglose = nomina_desglose_df[nomina_desglose_df['clave.'] == nomina]
+        if not fila_desglose.empty:
+            fila_desglose = fila_desglose.iloc[0]
+            
+            # Aplicar mapeo de percepciones
+            percepciones = {nombre: fila_desglose[col] if col in fila_desglose else 0.0 for col, nombre in PERCEPCIONES_MAP.items()}
+            
+            # Aplicar mapeo de deducciones
+            deducciones = {nombre: fila_desglose[col] if col in fila_desglose else 0.0 for col, nombre in DEDUCCIONES_MAP.items()}
+            
+            return jsonify({
+                "percepciones": percepciones,
+                "deducciones": deducciones
+            }), 200
+        else:
+            return jsonify({"error": f"No se encontraron datos para la nómina {nomina}"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     if os.getenv('FLASK_ENV') == 'production':
