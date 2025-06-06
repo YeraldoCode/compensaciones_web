@@ -213,88 +213,87 @@ def compensaciones():
         return render_template('login_alert.html', error="Por favor, proporciona un número de nómina o un nombre completo para realizar la búsqueda.")
 
     try:
-        # Leer directamente el archivo PLANTILLA_DESGLOSE.xlsx
-        file_path = os.path.join(app.config['UPLOAD_FOLDER'], 'PLANTILLA_DESGLOSE.xlsx')
-        if not os.path.exists(file_path):
-            return render_template('login_alert.html', error="No se encontró el archivo de datos.")
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Buscar en compensaciones
+            if nomina:
+                cursor.execute('''
+                    SELECT DISTINCT nomina, nombre 
+                    FROM compensaciones 
+                    WHERE nomina = ? AND semana = ?
+                ''', (nomina.strip(), semana))
+            else:
+                cursor.execute('''
+                    SELECT DISTINCT nomina, nombre 
+                    FROM compensaciones 
+                    WHERE nombre LIKE ? AND semana = ?
+                ''', (f'%{nombre.strip()}%', semana))
+            
+            empleado = cursor.fetchone()
+            if not empleado:
+                return render_template('login_alert.html', 
+                                    error="No se encontraron datos para el número de nómina o el nombre proporcionado.",
+                                    nomina=nomina, nombre=nombre)
 
-        # Cargar datos del Excel
-        df_compensaciones = pd.read_excel(file_path, sheet_name='BD_COMPENSACIONES', dtype={'NOMINA': str})
-        df_nomina = pd.read_excel(file_path, sheet_name='BD', dtype={'clave.': str})
+            # Obtener compensaciones
+            cursor.execute('''
+                SELECT concepto, valor 
+                FROM compensaciones 
+                WHERE nomina = ? AND semana = ?
+            ''', (empleado['nomina'], semana))
+            
+            compensaciones = cursor.fetchall()
+            datos = {
+                'NOMINA': empleado['nomina'],
+                'NOMBRE': empleado['nombre']
+            }
+            
+            total_compensaciones = 0
+            for comp in compensaciones:
+                datos[comp['concepto']] = comp['valor']
+                total_compensaciones += comp['valor']
+            
+            datos['TOTAL'] = f"${total_compensaciones:,.2f}"
 
-        # Buscar en compensaciones
-        if nomina:
-            df_comp = df_compensaciones[df_compensaciones['NOMINA'] == nomina.strip()]
-        else:
-            df_comp = df_compensaciones[df_compensaciones['NOMBRE'].str.contains(nombre.strip(), case=False, na=False)]
-
-        if df_comp.empty:
-            return render_template('login_alert.html', 
-                                error="No se encontraron datos para el número de nómina o el nombre proporcionado.",
-                                nomina=nomina, nombre=nombre)
-
-        # Procesar datos de compensaciones
-        row_comp = df_comp.iloc[0]
-        datos = {
-            'NOMINA': str(row_comp['NOMINA']),
-            'NOMBRE': str(row_comp['NOMBRE'])
-        }
-
-        total_compensaciones = 0
-        for col in df_compensaciones.columns:
-            if col not in ['NOMINA', 'NOMBRE']:
-                valor = procesar_valor(row_comp[col])
-                if valor != 0:
-                    datos[col] = valor
-                    total_compensaciones += valor
-
-        datos['TOTAL'] = f"${total_compensaciones:,.2f}"
-
-        # Buscar en nómina
-        if nomina:
-            df_nom = df_nomina[df_nomina['clave.'] == nomina.strip()]
-        else:
-            df_nom = df_nomina[df_nomina['nombre completo.'].str.contains(nombre.strip(), case=False, na=False)]
-
-        nomina_obj = None
-        if not df_nom.empty:
-            row_nom = df_nom.iloc[0]
+            # Obtener nómina
+            nomina_obj = None
             percepciones = {}
             deducciones = {}
             total_percepciones = 0
             total_deducciones = 0
 
-            # Procesar percepciones
-            for col, nombre_concepto in PERCEPCIONES_MAP.items():
-                if col in row_nom:
-                    valor = procesar_valor(row_nom[col])
-                    if valor != 0:
-                        percepciones[nombre_concepto] = valor
-                        total_percepciones += valor
+            # Obtener percepciones
+            cursor.execute('''
+                SELECT concepto, valor 
+                FROM nomina 
+                WHERE nomina = ? AND semana = ? AND tipo = 'PERCEPCION'
+            ''', (empleado['nomina'], semana))
+            
+            for row in cursor.fetchall():
+                percepciones[row['concepto']] = row['valor']
+                total_percepciones += row['valor']
 
-            # Procesar deducciones
-            for col, nombre_concepto in DEDUCCIONES_MAP.items():
-                if col in row_nom:
-                    valor = procesar_valor(row_nom[col])
-                    if nombre_concepto == 'IMSS':  # Log específico para IMSS
-                        print(f"IMSS para {datos['NOMINA']} ({datos['NOMBRE']}): {valor}")
-                    if valor != 0:
-                        deducciones[nombre_concepto] = valor
-                        total_deducciones += valor
+            # Obtener deducciones
+            cursor.execute('''
+                SELECT concepto, valor 
+                FROM nomina 
+                WHERE nomina = ? AND semana = ? AND tipo = 'DEDUCCION'
+            ''', (empleado['nomina'], semana))
+            
+            for row in cursor.fetchall():
+                deducciones[row['concepto']] = row['valor']
+                total_deducciones += row['valor']
 
-            # Solo agregar totales si hay valores
-            if percepciones:
+            # Crear objeto de nómina si hay datos
+            if percepciones or deducciones:
                 nomina_obj = type('Nomina', (), {})()
-                nomina_obj.percepciones = percepciones
-                nomina_obj.total_percepciones = total_percepciones
-
-            if deducciones:
-                if not nomina_obj:
-                    nomina_obj = type('Nomina', (), {})()
-                nomina_obj.deducciones = deducciones
-                nomina_obj.total_deducciones = total_deducciones
-
-            if nomina_obj:
+                if percepciones:
+                    nomina_obj.percepciones = percepciones
+                    nomina_obj.total_percepciones = total_percepciones
+                if deducciones:
+                    nomina_obj.deducciones = deducciones
+                    nomina_obj.total_deducciones = total_deducciones
                 nomina_obj.neto_a_pagar = total_percepciones - total_deducciones
 
     except Exception as e:
