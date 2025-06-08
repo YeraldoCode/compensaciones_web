@@ -168,6 +168,9 @@ def cargar_datos_excel(file_path, semana):
                 for col, nombre_concepto in PERCEPCIONES_MAP.items():
                     if col in row:
                         valor = procesar_valor(row[col])
+                        # Sumar los valores de ambas columnas de viajes adicionales
+                        if col == 'VIAJES ADICIONA' and 'VIAJES ADICIONA.1' in row:
+                            valor += procesar_valor(row['VIAJES ADICIONA.1'])
                         if col in ['PRIMA DOMINICAL', 'DOMINGO LABORAD']:
                             print(f"Procesando {col} para {nomina}: valor original={row[col]}, valor procesado={valor}")
                         if valor != 0:
