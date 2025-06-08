@@ -331,7 +331,9 @@ def compensaciones():
                 
                 for row in cursor.fetchall():
                     percepciones[row['concepto']] = row['valor']
-                    total_percepciones += row['valor']
+                    # No incluir VALES DE DESPENSA en el total de percepciones
+                    if row['concepto'] != 'VALES DE DESPENSA':
+                        total_percepciones += row['valor']
 
                 # Obtener deducciones
                 cursor.execute('''
