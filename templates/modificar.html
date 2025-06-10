@@ -149,6 +149,17 @@
                     {% endif %}
                 </div>
             </div>
+            <!-- Mostrar la última semana seleccionada -->
+            <div class="card bg-success text-dark mx-auto mt-3" style="max-width: 400px;">
+                <div class="card-body">
+                    <h5 class="card-title">Última semana seleccionada</h5>
+                    {% if ultima_semana %}
+                    <p class="card-text"><strong>Semana:</strong> {{ ultima_semana }}</p>
+                    {% else %}
+                    <p class="card-text">No hay registros de semanas seleccionadas.</p>
+                    {% endif %}
+                </div>
+            </div>
         </div>
     </div>
 </body>

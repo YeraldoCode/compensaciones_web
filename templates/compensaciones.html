@@ -1,122 +1,160 @@
-{% extends "base.html" %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Compensaciones</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <style>
+        body {
+            background-color: #2e7d32; /* Verde oscuro */
+            color:#2e7d32;
+        }
+        .table-container {
+            background-color: #ffffff;
+            color: #2e7d32;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+        .table th {
+            background-color: #1b5e20; /* Verde más oscuro */
+            color: #ffffff;
+        }
+        .btn-primary {
+            background-color: #1b5e20;
+            border-color: #1b5e20;
+        }
+        .btn-primary:hover {
+            background-color: #2e7d32;
+            border-color: #2e7d32;
+        }
+        .section-title {
+            color: #1b5e20;
+            border-bottom: 2px solid #1b5e20;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        .total-row {
+            font-weight: bold;
+            background-color: #e8f5e9;
+        }
+        .value-cell {
+            text-align: right;
+            font-family: monospace;
+        }
+        .section {
+            margin-bottom: 30px;
+        }
+        .section:last-child {
+            margin-bottom: 0;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <div class="container py-5">
+        <div class="table-container">
+            <h1 class="text-center mb-4">Detalles de Nómina</h1>
+            {% if semana %}
+            <p class="text-center text-muted">Semana: {{ semana }}</p>
+            {% endif %}
 
-{% block content %}
-<div class="container mt-4">
-    <h2>Desglose de Compensaciones</h2>
-    <div class="card mb-4">
-        <div class="card-body">
-            <h5 class="card-title">Información del Empleado</h5>
-            <p><strong>Nómina:</strong> {{ datos.NOMINA }}</p>
-            <p><strong>Nombre:</strong> {{ datos.NOMBRE }}</p>
-            <p><strong>Semana:</strong> {{ semana }}</p>
-            <p><strong>Fecha de Consulta:</strong> {{ now.strftime('%d/%m/%Y %H:%M:%S') }}</p>
-        </div>
-    </div>
+            {% if nomina %}
+            <div class="section">
+                <h2 class="section-title">Percepciones</h2>
+                <table class="table table-bordered">
+                    <thead>
+                        <tr>
+                            <th>Concepto</th>
+                            <th class="text-end">Valor</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for concepto, valor in nomina.percepciones.items() %}
+                        {% if valor > 0 %}
+                        <tr>
+                            <td>{{ concepto }}</td>
+                            <td class="value-cell">${{ '{:,.2f}'.format(valor) }}</td>
+                        </tr>
+                        {% endif %}
+                        {% endfor %}
+                        <tr class="total-row">
+                            <td>Total Percepciones</td>
+                            <td class="value-cell">${{ '{:,.2f}'.format(nomina.total_percepciones) }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
 
-    <div class="row">
-        <!-- Compensaciones -->
-        <div class="col-md-6">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">Compensaciones</h5>
-                </div>
-                <div class="card-body">
-                    <table class="table table-striped">
-                        <thead>
-                            <tr>
-                                <th>Concepto</th>
-                                <th class="text-end">Importe</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for key, value in datos.items() %}
-                                {% if key not in ['NOMINA', 'NOMBRE', 'TOTAL'] %}
-                                    <tr>
-                                        <td>{{ key }}</td>
-                                        <td class="text-end">${{ "{:,.2f}".format(value) }}</td>
-                                    </tr>
-                                {% endif %}
-                            {% endfor %}
-                            <tr class="table-primary">
-                                <td><strong>Total Compensaciones</strong></td>
-                                <td class="text-end"><strong>{{ datos.TOTAL }}</strong></td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
+            <div class="section">
+                <h2 class="section-title">Deducciones</h2>
+                <table class="table table-bordered">
+                    <thead>
+                        <tr>
+                            <th>Concepto</th>
+                            <th class="text-end">Valor</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for concepto, valor in nomina.deducciones.items() %}
+                        {% if valor > 0 %}
+                        <tr>
+                            <td>{{ concepto }}</td>
+                            <td class="value-cell">${{ '{:,.2f}'.format(valor) }}</td>
+                        </tr>
+                        {% endif %}
+                        {% endfor %}
+                        <tr class="total-row">
+                            <td>Total Deducciones</td>
+                            <td class="value-cell">${{ '{:,.2f}'.format(nomina.total_deducciones) }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="section">
+                <h2 class="section-title">Neto a Pagar</h2>
+                <table class="table table-bordered">
+                    <tbody>
+                        <tr class="total-row">
+                            <td>Neto a Pagar</td>
+                            <td class="value-cell text-success">${{ '{:,.2f}'.format(nomina.neto_a_pagar) }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+
+            <div class="section">
+                <h2 class="section-title">Compensaciones</h2>
+                <table class="table table-bordered">
+                    <thead>
+                        <tr>
+                            <th>Concepto</th>
+                            <th class="text-end">Valor</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for concepto, valor in datos.items() %}
+                        {% if concepto != 'NOMINA' and concepto != 'TOTAL' and valor != '' %}
+                        <tr>
+                            <td>{{ concepto }}</td>
+                            <td class="value-cell">{{ valor }}</td>
+                        </tr>
+                        {% endif %}
+                        {% endfor %}
+                        <tr class="total-row">
+                            <td>Total Compensaciones</td>
+                            <td class="value-cell">{{ datos['TOTAL'] }}</td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </div>
 
-        <!-- Nómina -->
-        <div class="col-md-6">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0">Nómina</h5>
-                </div>
-                <div class="card-body">
-                    {% if nomina %}
-                        <!-- Percepciones -->
-                        {% if nomina.percepciones %}
-                            <h6 class="mb-3">Percepciones</h6>
-                            <table class="table table-striped">
-                                <thead>
-                                    <tr>
-                                        <th>Concepto</th>
-                                        <th class="text-end">Importe</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for concepto, valor in nomina.percepciones.items() %}
-                                        <tr>
-                                            <td>{{ concepto }}</td>
-                                            <td class="text-end">${{ "{:,.2f}".format(valor) }}</td>
-                                        </tr>
-                                    {% endfor %}
-                                    <tr class="table-primary">
-                                        <td><strong>Total Percepciones</strong></td>
-                                        <td class="text-end"><strong>${{ "{:,.2f}".format(nomina.total_percepciones) }}</strong></td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        {% endif %}
-
-                        <!-- Deducciones -->
-                        {% if nomina.deducciones %}
-                            <h6 class="mb-3">Deducciones</h6>
-                            <table class="table table-striped">
-                                <thead>
-                                    <tr>
-                                        <th>Concepto</th>
-                                        <th class="text-end">Importe</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for concepto, valor in nomina.deducciones.items() %}
-                                        <tr>
-                                            <td>{{ concepto }}</td>
-                                            <td class="text-end">${{ "{:,.2f}".format(valor) }}</td>
-                                        </tr>
-                                    {% endfor %}
-                                    <tr class="table-primary">
-                                        <td><strong>Total Deducciones</strong></td>
-                                        <td class="text-end"><strong>${{ "{:,.2f}".format(nomina.total_deducciones) }}</strong></td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        {% endif %}
-
-                        <!-- Neto a Pagar -->
-                        <div class="alert alert-info mt-3">
-                            <h6 class="mb-0">Neto a Pagar: ${{ "{:,.2f}".format(nomina.neto_a_pagar) }}</h6>
-                        </div>
-                    {% else %}
-                        <div class="alert alert-warning">
-                            No hay información de nómina disponible.
-                        </div>
-                    {% endif %}
-                </div>
-            </div>
+        <div class="text-center mt-4">
+            <a href="/" class="btn btn-primary">Volver</a>
         </div>
     </div>
-</div>
-{% endblock %}
+</body>
+</html>

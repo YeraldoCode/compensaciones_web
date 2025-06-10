@@ -1,8 +1,19 @@
 import pandas as pd
 import os
 
-# Ruta del archivo Excel
-EXCEL_PATH = 'data/PLANTILLA_DESGLOSE_SEMANA_22.xlsx'
+# Ruta del archivo de última actualización
+ULTIMA_ACTUALIZACION_PATH = 'data/ultima_actualizacion.txt'
+
+# Obtener la semana actual desde el archivo de última actualización
+if os.path.exists(ULTIMA_ACTUALIZACION_PATH):
+    with open(ULTIMA_ACTUALIZACION_PATH, 'r') as f:
+        line = f.read().strip()
+        if line:
+            partes = line.split('|')
+            if len(partes) == 2:
+                EXCEL_PATH = f"data/{partes[0]}"
+else:
+    EXCEL_PATH = 'data/PLANTILLA_DESGLOSE_SEMANA_22.xlsx'
 
 def verificar_excel():
     try:
@@ -40,4 +51,4 @@ def verificar_excel():
         print(f"Error al verificar el archivo Excel: {str(e)}")
 
 if __name__ == "__main__":
-    verificar_excel() 
+    verificar_excel()

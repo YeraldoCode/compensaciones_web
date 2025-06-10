@@ -5,13 +5,11 @@ import os
 import secrets
 from datetime import datetime
 from config import PERCEPCIONES_MAP, DEDUCCIONES_MAP
-import sqlite3
-from contextlib import contextmanager
 
 app = Flask(__name__)
 
-# Configuración de la base de datos
-DATABASE_PATH = os.path.join('data', 'compensaciones.db')
+# Ruta del archivo Excel
+EXCEL_PATH = os.path.join('data', 'PLANTILLA_DESGLOSE.xlsx')
 
 # Configuración para la carga de archivos
 UPLOAD_FOLDER = os.path.join('data')
@@ -21,205 +19,59 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 # Configuración de la clave secreta para sesiones
 app.secret_key = os.getenv('SECRET_KEY', secrets.token_hex(16))
 
-# Ruta del archivo de última actualización
-ULTIMA_ACTUALIZACION_PATH = os.path.join('data', 'ultima_actualizacion.txt')
-
-@contextmanager
-def get_db_connection():
-    conn = sqlite3.connect(DATABASE_PATH)
-    conn.row_factory = sqlite3.Row
-    try:
-        yield conn
-    finally:
-        conn.close()
-
-def init_db():
-    """Inicializa la base de datos con las tablas necesarias."""
-    # Asegurar que el directorio data existe
-    os.makedirs('data', exist_ok=True)
-    
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        
-        # Tabla de compensaciones
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS compensaciones (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nomina TEXT NOT NULL,
-            nombre TEXT NOT NULL,
-            concepto TEXT NOT NULL,
-            valor REAL NOT NULL,
-            semana TEXT,
-            fecha_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        ''')
-        
-        # Tabla de nomina
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS nomina (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nomina TEXT NOT NULL,
-            nombre TEXT NOT NULL,
-            concepto TEXT NOT NULL,
-            valor REAL NOT NULL,
-            tipo TEXT NOT NULL,  -- 'PERCEPCION' o 'DEDUCCION'
-            semana TEXT,
-            fecha_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        ''')
-        
-        # Índices para búsquedas rápidas
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_compensaciones_nomina ON compensaciones(nomina)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_compensaciones_nombre ON compensaciones(nombre)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_nomina_nomina ON nomina(nomina)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_nomina_nombre ON nomina(nombre)')
-        
-        conn.commit()
+# Variable global para almacenar los DataFrames en memoria
+compensaciones_df = None
+nomina_desglose_df = None
 
 def procesar_valor(valor):
     """Procesa un valor y lo convierte a float."""
-    print(f"Procesando valor original: {valor} (tipo: {type(valor)})")  # Debug log
     if valor is None or valor == '' or str(valor).lower() == 'nan':
-        print(f"Valor vacío o nulo: {valor}")  # Debug log
         return 0.0
     try:
         if isinstance(valor, (int, float)):
-            print(f"Valor numérico: {valor}")  # Debug log
             return float(valor)
         if isinstance(valor, str):
-            # Limpiar el valor de caracteres no numéricos excepto el punto decimal
             v_clean = valor.replace(',', '').replace('$', '').replace(' ', '')
-            print(f"Valor limpio: {v_clean}")  # Debug log
-            # Verificar si es un número válido
-            if v_clean.replace('.', '', 1).replace('-', '', 1).isdigit():
-                # Asegurarse de que el valor no sea demasiado grande
-                valor_float = float(v_clean)
-                print(f"Valor convertido a float: {valor_float}")  # Debug log
-                if valor_float > 1000000:  # Si el valor es mayor a 1 millón, probablemente hay un error
-                    print(f"Valor sospechosamente grande: {valor_float} (original: {valor})")
-                    return 0.0
-                return valor_float
-            print(f"Valor no es un número válido: {v_clean}")  # Debug log
-            return 0.0
-        print(f"Tipo de valor no manejado: {type(valor)}")  # Debug log
+            return float(v_clean) if v_clean.replace('.', '', 1).replace('-', '', 1).isdigit() else 0.0
         return 0.0
-    except Exception as e:
-        print(f"Error procesando valor '{valor}': {str(e)}")
+    except Exception:
         return 0.0
 
-def allowed_file(filename):
-    """Verifica si el archivo tiene una extensión permitida."""
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
-def cargar_datos_excel(file_path, semana):
-    """Carga los datos del Excel en la base de datos."""
+def cargar_excel():
+    global compensaciones_df, nomina_desglose_df
+    # Leer el archivo más reciente desde ultima_actualizacion.txt
+    ULTIMA_ACTUALIZACION_PATH = os.path.join('data', 'ultima_actualizacion.txt')
+    if os.path.exists(ULTIMA_ACTUALIZACION_PATH):
+        try:
+            with open(ULTIMA_ACTUALIZACION_PATH, 'r', encoding='utf-8') as f:
+                line = f.read().strip()
+                if line:
+                    partes = line.split('|')
+                    if len(partes) == 2:
+                        archivo_reciente, _ = partes
+                        excel_path = os.path.join('data', archivo_reciente)
+                        if os.path.exists(excel_path):
+                            compensaciones_df = pd.read_excel(excel_path, sheet_name='BD_COMPENSACIONES').fillna('')
+                            try:
+                                nomina_desglose_df = pd.read_excel(excel_path, sheet_name='BD').fillna('')
+                            except Exception:
+                                nomina_desglose_df = None
+                            return
+        except Exception:
+            pass
+    # Fallback: cargar el archivo por defecto si no se encuentra el más reciente
+    compensaciones_df = pd.read_excel(EXCEL_PATH, sheet_name='BD_COMPENSACIONES').fillna('')
     try:
-        print(f"Cargando archivo: {file_path}")  # Debug log
-        print(f"Semana: {semana}")  # Debug log
-        
-        # Leer el Excel
-        df_compensaciones = pd.read_excel(file_path, sheet_name='BD_COMPENSACIONES', dtype={'NOMINA': str})
-        df_nomina = pd.read_excel(file_path, sheet_name='BD', dtype={'clave.': str})
-        
-        print(f"Registros en BD_COMPENSACIONES: {len(df_compensaciones)}")  # Debug log
-        print(f"Registros en BD: {len(df_nomina)}")  # Debug log
-        
-        # Debug: Mostrar columnas disponibles
-        print("Columnas en BD:", df_nomina.columns.tolist())
-        
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            
-            # Limpiar datos anteriores de la semana
-            cursor.execute('DELETE FROM compensaciones WHERE semana = ?', (semana,))
-            cursor.execute('DELETE FROM nomina WHERE semana = ?', (semana,))
-            
-            # Procesar compensaciones
-            compensaciones_insertadas = 0
-            for _, row in df_compensaciones.iterrows():
-                nomina = str(row['NOMINA']).strip()
-                nombre = str(row['NOMBRE']).strip()
-                
-                for col in df_compensaciones.columns:
-                    if col not in ['NOMINA', 'NOMBRE']:
-                        valor = procesar_valor(row[col])
-                        if valor != 0:  # Solo guardar valores no cero
-                            cursor.execute('''
-                                INSERT INTO compensaciones (nomina, nombre, concepto, valor, semana)
-                                VALUES (?, ?, ?, ?, ?)
-                            ''', (nomina, nombre, col, valor, semana))
-                            compensaciones_insertadas += 1
-            
-            print(f"Compensaciones insertadas: {compensaciones_insertadas}")  # Debug log
-            
-            # Procesar nómina
-            nomina_insertada = 0
-            for _, row in df_nomina.iterrows():
-                nomina = str(row['clave.']).strip()
-                nombre = str(row['nombre completo.']).strip()
-                
-                # Debug: Mostrar valores específicos
-                if 'PRIMA DOMINICAL' in row:
-                    print(f"PRIMA DOMINICAL raw value for {nomina} ({nombre}): {row['PRIMA DOMINICAL']}")
-                if 'DOMINGO LABORAD' in row:
-                    print(f"DOMINGO LABORADO raw value for {nomina} ({nombre}): {row['DOMINGO LABORAD']}")
-                
-                # Procesar percepciones
-                for col, nombre_concepto in PERCEPCIONES_MAP.items():
-                    if col in row:
-                        valor = procesar_valor(row[col])
-                        # Sumar los valores de ambas columnas de viajes adicionales
-                        if col == 'VIAJES ADICIONA' and 'VIAJES ADICIONA.1' in row:
-                            valor += procesar_valor(row['VIAJES ADICIONA.1'])
-                        if col in ['PRIMA DOMINICAL', 'DOMINGO LABORAD']:
-                            print(f"Procesando {col} para {nomina}: valor original={row[col]}, valor procesado={valor}")
-                        if valor != 0:
-                            cursor.execute('''
-                                INSERT INTO nomina (nomina, nombre, concepto, valor, tipo, semana)
-                                VALUES (?, ?, ?, ?, ?, ?)
-                            ''', (nomina, nombre, nombre_concepto, valor, 'PERCEPCION', semana))
-                            nomina_insertada += 1
-                
-                # Procesar deducciones
-                for col, nombre_concepto in DEDUCCIONES_MAP.items():
-                    if col in row:
-                        valor = procesar_valor(row[col])
-                        if nombre_concepto == 'IMSS':  # Log específico para IMSS
-                            print(f"IMSS processed value for {nomina} ({nombre}): {valor}")
-                        if valor != 0:
-                            cursor.execute('''
-                                INSERT INTO nomina (nomina, nombre, concepto, valor, tipo, semana)
-                                VALUES (?, ?, ?, ?, ?, ?)
-                            ''', (nomina, nombre, nombre_concepto, valor, 'DEDUCCION', semana))
-                            nomina_insertada += 1
-            
-            print(f"Registros de nómina insertados: {nomina_insertada}")  # Debug log
-            
-            conn.commit()
-            
-            # Verificar datos insertados
-            cursor.execute("SELECT COUNT(*) FROM compensaciones WHERE semana = ?", (semana,))
-            total_compensaciones = cursor.fetchone()[0]
-            cursor.execute("SELECT COUNT(*) FROM nomina WHERE semana = ?", (semana,))
-            total_nomina = cursor.fetchone()[0]
-            
-            print(f"Total de compensaciones en la base de datos para la semana {semana}: {total_compensaciones}")
-            print(f"Total de registros de nómina en la base de datos para la semana {semana}: {total_nomina}")
-            
-            # Verificar valores específicos
-            cursor.execute("""
-                SELECT concepto, valor 
-                FROM nomina 
-                WHERE nomina = ? AND semana = ? AND concepto IN ('PRIMA DOMINICAL', 'DOMINGO LABORADO')
-            """, ('19103797', semana))
-            rows = cursor.fetchall()
-            for row in rows:
-                print(f"{row['concepto']} en base de datos para 19103797: {row['valor']}")
-            
-            return True
-    except Exception as e:
-        print(f"Error cargando datos: {str(e)}")
-        return False
+        nomina_desglose_df = pd.read_excel(EXCEL_PATH, sheet_name='BD').fillna('')
+    except Exception:
+        nomina_desglose_df = None
+
+# Cargar el Excel al iniciar la app
+cargar_excel()
+
+# Verificar si el archivo tiene una extensión permitida
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 @app.route('/')
 def login():
@@ -232,6 +84,7 @@ def compensaciones():
     semana = None
     
     # Obtener semana actual
+    ULTIMA_ACTUALIZACION_PATH = os.path.join('data', 'ultima_actualizacion.txt')
     if os.path.exists(ULTIMA_ACTUALIZACION_PATH):
         try:
             with open(ULTIMA_ACTUALIZACION_PATH, 'r', encoding='utf-8') as f:
@@ -240,147 +93,94 @@ def compensaciones():
                     partes = line.split('|')
                     if len(partes) == 2:
                         _, semana = partes
-                        print(f"Semana actual: {semana}")  # Debug log
-        except Exception as e:
-            print(f"Error leyendo archivo de última actualización: {str(e)}")
+        except Exception:
             semana = None
 
     if not nomina and not nombre:
         return render_template('login_alert.html', error="Por favor, proporciona un número de nómina o un nombre completo para realizar la búsqueda.")
 
     try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            
-            # Buscar en ambas tablas
-            empleado = None
-            datos = {}
-            nomina_obj = None
-            
-            # Buscar en compensaciones
-            if nomina:
-                cursor.execute('''
-                    SELECT DISTINCT nomina, nombre 
-                    FROM compensaciones 
-                    WHERE nomina = ? AND semana = ?
-                ''', (nomina.strip(), semana))
-            else:
-                cursor.execute('''
-                    SELECT DISTINCT nomina, nombre 
-                    FROM compensaciones 
-                    WHERE nombre LIKE ? AND semana = ?
-                ''', (f'%{nombre.strip()}%', semana))
-            
-            empleado_comp = cursor.fetchone()
-            
-            # Buscar en nómina
-            if nomina:
-                cursor.execute('''
-                    SELECT DISTINCT nomina, nombre 
-                    FROM nomina 
-                    WHERE nomina = ? AND semana = ?
-                ''', (nomina.strip(), semana))
-            else:
-                cursor.execute('''
-                    SELECT DISTINCT nomina, nombre 
-                    FROM nomina 
-                    WHERE nombre LIKE ? AND semana = ?
-                ''', (f'%{nombre.strip()}%', semana))
-            
-            empleado_nom = cursor.fetchone()
-            
-            # Usar cualquiera de los dos resultados si existe
-            empleado = empleado_comp or empleado_nom
-            
-            if not empleado:
-                return render_template('login_alert.html', 
-                                    error="No se encontraron datos para el número de nómina o el nombre proporcionado.",
-                                    nomina=nomina, nombre=nombre)
+        # Procesar datos de compensaciones
+        df = compensaciones_df
+        if nomina:
+            try:
+                nomina_int = int(nomina)
+                fila = df[df['NOMINA'] == nomina_int]
+            except ValueError:
+                return render_template('login_alert.html', error="El número de nómina debe ser un valor numérico.", nomina=nomina)
+        elif nombre:
+            fila = df[df['NOMBRE'].str.contains(nombre, case=False, na=False)]
 
-            # Obtener compensaciones si existen
-            if empleado_comp:
-                cursor.execute('''
-                    SELECT concepto, valor 
-                    FROM compensaciones 
-                    WHERE nomina = ? AND semana = ?
-                ''', (empleado['nomina'], semana))
-                
-                compensaciones = cursor.fetchall()
-                datos = {
-                    'NOMINA': empleado['nomina'],
-                    'NOMBRE': empleado['nombre']
-                }
-                
-                total_compensaciones = 0
-                for comp in compensaciones:
-                    datos[comp['concepto']] = comp['valor']
-                    total_compensaciones += comp['valor']
-                
-                datos['TOTAL'] = f"${total_compensaciones:,.2f}"
+        if fila.empty:
+            return render_template('login_alert.html', error="No se encontraron datos para el número de nómina o el nombre proporcionado.", nomina=nomina, nombre=nombre)
 
-            # Obtener nómina si existe
-            if empleado_nom:
+        datos = fila.to_dict(orient='records')[0]
+        datos['NOMINA'] = int(datos['NOMINA'])
+        
+        # Calcular total de compensaciones
+        total = sum(valor for clave, valor in datos.items() 
+                   if isinstance(valor, (int, float)) and clave != 'NOMINA')
+        datos['TOTAL'] = f"${total:,.2f}"
+
+        # Procesar datos de nómina
+        nomina_obj = None
+        try:
+            df_desglose = nomina_desglose_df
+            if nomina:
+                fila_desglose = df_desglose[df_desglose['clave.'] == nomina_int]
+            elif nombre:
+                fila_desglose = df_desglose[df_desglose['nombre completo.'].str.contains(nombre, case=False, na=False)]
+
+            if not fila_desglose.empty:
+                fila_desglose = fila_desglose.iloc[0]
+                
+                # Procesar percepciones
                 percepciones = {}
+                for col, nombre in PERCEPCIONES_MAP.items():
+                    valor = procesar_valor(fila_desglose.get(col, 0.0))
+                    percepciones[nombre] = valor
+
+                # Procesar deducciones
                 deducciones = {}
-                total_percepciones = 0
-                total_deducciones = 0
+                for col, nombre in DEDUCCIONES_MAP.items():
+                    valor = procesar_valor(fila_desglose.get(col, 0.0))
+                    deducciones[nombre] = valor
 
-                # Obtener percepciones
-                cursor.execute('''
-                    SELECT concepto, valor 
-                    FROM nomina 
-                    WHERE nomina = ? AND semana = ? AND tipo = 'PERCEPCION'
-                ''', (empleado['nomina'], semana))
+                # Calcular totales
+                total_percepciones = sum(percepciones.values())
+                total_deducciones = sum(deducciones.values())
                 
-                for row in cursor.fetchall():
-                    percepciones[row['concepto']] = row['valor']
-                    # No incluir VALES DE DESPENSA en el total de percepciones
-                    if row['concepto'] != 'VALES DE DESPENSA':
-                        total_percepciones += row['valor']
+                # Obtener neto a pagar
+                neto_a_pagar = procesar_valor(fila_desglose.get('NETO A PAGAR', 0.0))
+                if neto_a_pagar == 0.0:
+                    neto_a_pagar = total_percepciones - total_deducciones
 
-                # Obtener deducciones
-                cursor.execute('''
-                    SELECT concepto, valor 
-                    FROM nomina 
-                    WHERE nomina = ? AND semana = ? AND tipo = 'DEDUCCION'
-                ''', (empleado['nomina'], semana))
-                
-                for row in cursor.fetchall():
-                    deducciones[row['concepto']] = row['valor']
-                    total_deducciones += row['valor']
+                nomina_obj = type('Nomina', (), {})()
+                nomina_obj.percepciones = percepciones
+                nomina_obj.deducciones = deducciones
+                nomina_obj.total_percepciones = total_percepciones
+                nomina_obj.total_deducciones = total_deducciones
+                nomina_obj.neto_a_pagar = neto_a_pagar
 
-                # Crear objeto de nómina si hay datos
-                if percepciones or deducciones:
-                    nomina_obj = type('Nomina', (), {
-                        'percepciones': percepciones,
-                        'deducciones': deducciones,
-                        'total_percepciones': total_percepciones,
-                        'total_deducciones': total_deducciones,
-                        'neto_a_pagar': total_percepciones - total_deducciones
-                    })
+        except Exception as e:
+            print(f"Error procesando nómina: {str(e)}")
+            nomina_obj = None
 
-            # Si no hay datos en ninguna tabla, mostrar error
-            if not datos and not nomina_obj:
-                return render_template('login_alert.html', 
-                                    error="No se encontraron datos para el número de nómina o el nombre proporcionado.",
-                                    nomina=nomina, nombre=nombre)
-
-            return render_template('compensaciones.html', 
-                                datos=datos if datos else {'NOMINA': empleado['nomina'], 'NOMBRE': empleado['nombre'], 'TOTAL': '$0.00'},
-                                nomina=nomina_obj,
-                                semana=semana,
-                                now=datetime.now())
     except Exception as e:
-        print(f"Error en la búsqueda: {str(e)}")
-        return render_template('login_alert.html', 
-                            error="Ocurrió un error al procesar la solicitud. Por favor, intenta nuevamente.",
-                            nomina=nomina, nombre=nombre)
+        return f"Error al leer el archivo: {str(e)}", 500
+
+    return render_template('compensaciones.html', 
+                         datos=datos, 
+                         semana=semana, 
+                         nomina=nomina_obj, 
+                         now=datetime.now())
+
+ULTIMA_ACTUALIZACION_PATH = os.path.join('data', 'ultima_actualizacion.txt')
 
 @app.route('/modificar', methods=['GET', 'POST'])
 def modificar_archivo():
     ultimo_archivo = None
     ultima_semana = None
-    
     # Leer última actualización si existe
     if os.path.exists(ULTIMA_ACTUALIZACION_PATH):
         try:
@@ -392,70 +192,57 @@ def modificar_archivo():
                         ultimo_archivo, ultima_semana = partes
         except Exception:
             pass
-            
     if request.method == 'POST':
         if 'file' not in request.files:
             flash('No se seleccionó ningún archivo')
             return redirect(request.url)
-        
         file = request.files['file']
         semana = request.form.get('semana')
-        
-        # Validaciones básicas
         if file.filename == '':
             flash('No se seleccionó ningún archivo')
             return redirect(request.url)
         if not semana:
             flash('Debes seleccionar una semana')
             return redirect(request.url)
-        if not allowed_file(file.filename):
-            flash('Solo se permiten archivos Excel (.xlsx)')
-            return redirect(request.url)
-            
-        try:
-            # Validar que el archivo sea un Excel válido y tenga las hojas correctas
-            df = pd.read_excel(file, sheet_name=None)
-            required_sheets = ['BD_COMPENSACIONES', 'BD']
-            missing_sheets = [sheet for sheet in required_sheets if sheet not in df]
-            
-            if missing_sheets:
-                flash(f'El archivo debe contener las siguientes hojas: {", ".join(required_sheets)}')
-                return redirect(request.url)
-                
-            # Validar que las hojas tengan datos
-            for sheet in required_sheets:
-                if df[sheet].empty:
-                    flash(f'La hoja {sheet} está vacía')
-                    return redirect(request.url)
-            
+        if file and allowed_file(file.filename):
             # Guardar el archivo con nombre único por semana
             unique_filename = f"PLANTILLA_DESGLOSE_SEMANA_{semana}.xlsx"
             file_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
-            
-            # Guardar el archivo
-            file.seek(0)
             file.save(file_path)
-            
-            # Cargar datos en la base de datos
-            if cargar_datos_excel(file_path, semana):
-                # Guardar la información de la última actualización
-                with open(ULTIMA_ACTUALIZACION_PATH, 'w', encoding='utf-8') as f:
-                    f.write(f"{unique_filename}|{semana}")
-                    
-                flash('Archivo actualizado correctamente')
-            else:
-                flash('Error al cargar los datos en la base de datos')
-            
+            # Sobrescribir el archivo principal para que siempre se lea el último
+            file.seek(0)
+            file.save(os.path.join(app.config['UPLOAD_FOLDER'], 'PLANTILLA_DESGLOSE.xlsx'))
+            # Guardar la información de la última actualización
+            with open(ULTIMA_ACTUALIZACION_PATH, 'w', encoding='utf-8') as f:
+                f.write(f"{unique_filename}|{semana}")
+            flash('Archivo actualizado correctamente')
+            # Recargar el Excel en memoria
+            cargar_excel()
             return redirect(url_for('modificar_archivo'))
-            
-        except Exception as e:
-            flash(f'Error al procesar el archivo: {str(e)}')
-            return redirect(request.url)
-            
     return render_template('modificar.html', ultimo_archivo=ultimo_archivo, ultima_semana=ultima_semana)
 
-# Inicializar la base de datos al iniciar la aplicación
-init_db()
+@app.route('/nomina/<int:nomina>', methods=['GET'])
+def obtener_nomina(nomina):
+    try:
+        nomina_desglose_df = pd.read_excel(EXCEL_PATH, sheet_name='BD').fillna('')
+        fila_desglose = nomina_desglose_df[nomina_desglose_df['clave.'] == nomina]
+        if not fila_desglose.empty:
+            fila_desglose = fila_desglose.iloc[0]
+            
+            # Aplicar mapeo de percepciones
+            percepciones = {nombre: fila_desglose[col] if col in fila_desglose else 0.0 for col, nombre in PERCEPCIONES_MAP.items()}
+            
+            # Aplicar mapeo de deducciones
+            deducciones = {nombre: fila_desglose[col] if col in fila_desglose else 0.0 for col, nombre in DEDUCCIONES_MAP.items()}
+            
+            return jsonify({
+                "percepciones": percepciones,
+                "deducciones": deducciones
+            }), 200
+        else:
+            return jsonify({"error": f"No se encontraron datos para la nómina {nomina}"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     if os.getenv('FLASK_ENV') == 'production':
