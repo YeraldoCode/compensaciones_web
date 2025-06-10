@@ -1,4 +1,4 @@
-from app import cargar_datos_excel, init_db
+from app import cargar_excel, init_db
 import logging
 
 # Configurar logging
@@ -11,17 +11,12 @@ def main():
         # Inicializar la base de datos
         init_db()
         logger.info("Base de datos inicializada")
-        
+
         # Cargar datos del Excel
-        datos = cargar_datos_excel()
-        if datos:
-            logger.info(f"Datos cargados exitosamente para la semana {datos['semana']}")
-            logger.info(f"Compensaciones procesadas: {len(datos['compensaciones'])}")
-            logger.info(f"Registros de nómina procesados: {len(datos['nomina'])}")
-        else:
-            logger.error("Error al cargar los datos del Excel")
+        cargar_excel()
+        logger.info("Datos cargados y base de datos actualizada")
     except Exception as e:
         logger.error(f"Error en el proceso de carga: {str(e)}")
 
 if __name__ == '__main__':
-    main() 
+    main()

@@ -5,6 +5,7 @@ import os
 import secrets
 from datetime import datetime
 from config import PERCEPCIONES_MAP, DEDUCCIONES_MAP
+import sqlite3
 
 app = Flask(__name__)
 
@@ -37,9 +38,43 @@ def procesar_valor(valor):
     except Exception:
         return 0.0
 
+def init_db():
+    """Initialize the database schema."""
+    conn = sqlite3.connect('data/compensaciones.db')
+    cursor = conn.cursor()
+    # Create compensaciones table
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS compensaciones (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nomina INTEGER NOT NULL,
+            nombre TEXT NOT NULL,
+            concepto TEXT NOT NULL,
+            valor REAL NOT NULL,
+            semana INTEGER NOT NULL
+        )
+        """
+    )
+    # Create nomina table
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS nomina (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nomina INTEGER NOT NULL,
+            nombre TEXT NOT NULL,
+            concepto TEXT NOT NULL,
+            valor REAL NOT NULL,
+            tipo TEXT NOT NULL,
+            semana INTEGER NOT NULL
+        )
+        """
+    )
+    conn.commit()
+    conn.close()
+
+# Enhance cargar_excel to handle missing required values
 def cargar_excel():
     global compensaciones_df, nomina_desglose_df
-    # Leer el archivo más reciente desde ultima_actualizacion.txt
     ULTIMA_ACTUALIZACION_PATH = os.path.join('data', 'ultima_actualizacion.txt')
     if os.path.exists(ULTIMA_ACTUALIZACION_PATH):
         try:
@@ -48,23 +83,49 @@ def cargar_excel():
                 if line:
                     partes = line.split('|')
                     if len(partes) == 2:
-                        archivo_reciente, _ = partes
+                        archivo_reciente, semana = partes
                         excel_path = os.path.join('data', archivo_reciente)
                         if os.path.exists(excel_path):
                             compensaciones_df = pd.read_excel(excel_path, sheet_name='BD_COMPENSACIONES').fillna('')
-                            try:
-                                nomina_desglose_df = pd.read_excel(excel_path, sheet_name='BD').fillna('')
-                            except Exception:
-                                nomina_desglose_df = None
+                            nomina_desglose_df = pd.read_excel(excel_path, sheet_name='BD').fillna('')
+                            # Update database
+                            conn = sqlite3.connect('data/compensaciones.db')
+                            cursor = conn.cursor()
+                            # Clear existing data for the week
+                            cursor.execute("DELETE FROM compensaciones WHERE semana = ?", (semana,))
+                            cursor.execute("DELETE FROM nomina WHERE semana = ?", (semana,))
+                            # Insert compensaciones data
+                            for _, row in compensaciones_df.iterrows():
+                                cursor.execute(
+                                    "INSERT INTO compensaciones (nomina, nombre, concepto, valor, semana) VALUES (?, ?, ?, ?, ?)",
+                                    (
+                                        row.get('NOMINA', 0),
+                                        row.get('NOMBRE', 'Desconocido'),
+                                        row.get('CONCEPTO', 'Sin concepto'),
+                                        row.get('VALOR', 0.0),
+                                        semana
+                                    )
+                                )
+                            # Insert nomina data
+                            for _, row in nomina_desglose_df.iterrows():
+                                cursor.execute(
+                                    "INSERT INTO nomina (nomina, nombre, concepto, valor, tipo, semana) VALUES (?, ?, ?, ?, ?, ?)",
+                                    (
+                                        row.get('clave.', 0),
+                                        row.get('nombre completo.', 'Desconocido'),
+                                        row.get('CONCEPTO', 'Sin concepto'),
+                                        row.get('VALOR', 0.0),
+                                        row.get('TIPO', 'Sin tipo'),
+                                        semana
+                                    )
+                                )
+                            conn.commit()
+                            conn.close()
                             return
-        except Exception:
-            pass
-    # Fallback: cargar el archivo por defecto si no se encuentra el más reciente
+        except Exception as e:
+            print(f"Error al cargar el Excel: {str(e)}")
     compensaciones_df = pd.read_excel(EXCEL_PATH, sheet_name='BD_COMPENSACIONES').fillna('')
-    try:
-        nomina_desglose_df = pd.read_excel(EXCEL_PATH, sheet_name='BD').fillna('')
-    except Exception:
-        nomina_desglose_df = None
+    nomina_desglose_df = pd.read_excel(EXCEL_PATH, sheet_name='BD').fillna('')
 
 # Cargar el Excel al iniciar la app
 cargar_excel()
