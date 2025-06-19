@@ -88,44 +88,44 @@ def cargar_excel():
                         if os.path.exists(excel_path):
                             compensaciones_df = pd.read_excel(excel_path, sheet_name='BD_COMPENSACIONES').fillna('')
                             nomina_desglose_df = pd.read_excel(excel_path, sheet_name='BD').fillna('')
-                            # Update database
+                            
+                            # Verificar que las columnas requeridas estén presentes
+                            columnas_requeridas = [
+                                'NOMBRE', 'TEAM LEADER', 'COORDINADOR', 'BONO DELEGADO',
+                                'BONO DE ARRA. E INDIC.', 'RUTA LARGA-LIDER CERO', 'ESTANCIAS',
+                                'BONO FIJO PLANTAS CRITICAS', 'BONO FORANEO', 'BONO CONTRATACION',
+                                'BONO DE RECOMENDADO', 'BONO KPIS', 'APOYO A PLANTAS CRITICAS',
+                                'PAGO PENDIENTE/BONO GUARDIA/BONO CELESTICA',
+                                'VUELTAS NO REGISTRADAS EN BUSTRAX',
+                                'MONTO VUELTAS NO REGISTRADAS EN BUSTRAX'
+                            ]
+                            for columna in columnas_requeridas:
+                                if columna not in compensaciones_df.columns:
+                                    raise ValueError(f"La columna requerida '{columna}' no está presente en la hoja BD_COMPENSACIONES.")
+                            
+                            # Actualizar la base de datos
                             conn = sqlite3.connect('data/compensaciones.db')
                             cursor = conn.cursor()
-                            # Clear existing data for the week
+                            # Limpiar datos existentes para la semana
                             cursor.execute("DELETE FROM compensaciones WHERE semana = ?", (semana,))
-                            cursor.execute("DELETE FROM nomina WHERE semana = ?", (semana,))
-                            # Insert compensaciones data
+                            # Insertar datos de compensaciones
                             for _, row in compensaciones_df.iterrows():
-                                cursor.execute(
-                                    "INSERT INTO compensaciones (nomina, nombre, concepto, valor, semana) VALUES (?, ?, ?, ?, ?)",
-                                    (
-                                        row.get('NOMINA', 0),
-                                        row.get('NOMBRE', 'Desconocido'),
-                                        row.get('CONCEPTO', 'Sin concepto'),
-                                        row.get('VALOR', 0.0),
-                                        semana
+                                for columna in columnas_requeridas:
+                                    valor = procesar_valor(row.get(columna, 0.0))
+                                    cursor.execute(
+                                        "INSERT INTO compensaciones (nomina, nombre, concepto, valor, semana) VALUES (?, ?, ?, ?, ?)",
+                                        (
+                                            row.get('NOMBRE', 'Desconocido'),
+                                            columna,
+                                            valor,
+                                            semana
+                                        )
                                     )
-                                )
-                            # Insert nomina data
-                            for _, row in nomina_desglose_df.iterrows():
-                                cursor.execute(
-                                    "INSERT INTO nomina (nomina, nombre, concepto, valor, tipo, semana) VALUES (?, ?, ?, ?, ?, ?)",
-                                    (
-                                        row.get('clave.', 0),
-                                        row.get('nombre completo.', 'Desconocido'),
-                                        row.get('CONCEPTO', 'Sin concepto'),
-                                        row.get('VALOR', 0.0),
-                                        row.get('TIPO', 'Sin tipo'),
-                                        semana
-                                    )
-                                )
                             conn.commit()
                             conn.close()
                             return
         except Exception as e:
             print(f"Error al cargar el Excel: {str(e)}")
-    compensaciones_df = pd.read_excel(EXCEL_PATH, sheet_name='BD_COMPENSACIONES').fillna('')
-    nomina_desglose_df = pd.read_excel(EXCEL_PATH, sheet_name='BD').fillna('')
 
 # Cargar el Excel al iniciar la app
 cargar_excel()
@@ -143,7 +143,7 @@ def compensaciones():
     nomina = request.form.get('nomina')
     nombre = request.form.get('nombre')
     semana = None
-    
+
     # Obtener semana actual
     ULTIMA_ACTUALIZACION_PATH = os.path.join('data', 'ultima_actualizacion.txt')
     if os.path.exists(ULTIMA_ACTUALIZACION_PATH):
@@ -172,29 +172,46 @@ def compensaciones():
         elif nombre:
             fila = df[df['NOMBRE'].str.contains(nombre, case=False, na=False)]
 
+        # --- MODIFICACIÓN: Permitir mostrar nómina aunque no tenga compensaciones ---
         if fila.empty:
-            return render_template('login_alert.html', error="No se encontraron datos para el número de nómina o el nombre proporcionado.", nomina=nomina, nombre=nombre)
+            # Buscar en el desglose de nómina
+            df_desglose = nomina_desglose_df
+            if nomina:
+                try:
+                    nomina_int = int(nomina)
+                    fila_desglose = df_desglose[df_desglose['clave.'] == nomina_int]
+                except ValueError:
+                    fila_desglose = pd.DataFrame()
+            elif nombre:
+                fila_desglose = df_desglose[df_desglose['nombre completo.'].str.contains(nombre, case=False, na=False)]
+            else:
+                fila_desglose = pd.DataFrame()
 
-        datos = fila.to_dict(orient='records')[0]
-        datos['NOMINA'] = int(datos['NOMINA'])
-        
-        # Calcular total de compensaciones
-        total = sum(valor for clave, valor in datos.items() 
-                   if isinstance(valor, (int, float)) and clave != 'NOMINA')
-        datos['TOTAL'] = f"${total:,.2f}"
+            if not fila_desglose.empty:
+                datos = {}
+                datos['NOMINA'] = int(nomina) if nomina else None
+                datos['TOTAL'] = "$0.00"
+            else:
+                return render_template('login_alert.html', error="No se encontraron datos para el número de nómina o el nombre proporcionado.", nomina=nomina, nombre=nombre)
+        else:
+            datos = fila.to_dict(orient='records')[0]
+            datos['NOMINA'] = int(datos['NOMINA'])
+            total = sum(valor for clave, valor in datos.items() if isinstance(valor, (int, float)) and clave != 'NOMINA')
+            datos['TOTAL'] = f"${total:,.2f}"
+        # --- FIN MODIFICACIÓN ---
 
         # Procesar datos de nómina
         nomina_obj = None
         try:
             df_desglose = nomina_desglose_df
             if nomina:
-                fila_desglose = df_desglose[df_desglose['clave.'] == nomina_int]
+                fila_desglose = df_desglose[df_desglose['clave.'] == int(nomina)]
             elif nombre:
                 fila_desglose = df_desglose[df_desglose['nombre completo.'].str.contains(nombre, case=False, na=False)]
 
             if not fila_desglose.empty:
                 fila_desglose = fila_desglose.iloc[0]
-                
+
                 # Procesar percepciones
                 percepciones = {}
                 for col, nombre in PERCEPCIONES_MAP.items():
@@ -210,7 +227,7 @@ def compensaciones():
                 # Calcular totales
                 total_percepciones = sum(percepciones.values())
                 total_deducciones = sum(deducciones.values())
-                
+
                 # Obtener neto a pagar
                 neto_a_pagar = procesar_valor(fila_desglose.get('NETO A PAGAR', 0.0))
                 if neto_a_pagar == 0.0:
@@ -230,11 +247,13 @@ def compensaciones():
     except Exception as e:
         return f"Error al leer el archivo: {str(e)}", 500
 
-    return render_template('compensaciones.html', 
-                         datos=datos, 
-                         semana=semana, 
-                         nomina=nomina_obj, 
-                         now=datetime.now())
+    return render_template(
+        'compensaciones.html',
+        datos=datos,
+        semana=semana,
+        nomina=nomina_obj,
+        now=datetime.now()
+    )
 
 ULTIMA_ACTUALIZACION_PATH = os.path.join('data', 'ultima_actualizacion.txt')
 
