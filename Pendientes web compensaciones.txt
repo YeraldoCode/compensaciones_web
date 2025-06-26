@@ -1,0 +1,91 @@
+Pendientes web compensaciones.
+
+mapear de  la tabla de percepciones
+VIAJES ADICIONALES
+SERVICIOS ESPECIALES
+BONO DESEMPEÑO
+
+mapear de la tabla de percepciones la cuota sindical
+CUOTA SINDICAL
+
+
+def mapear_percepciones_deducciones_por_indice(fila_desglose):
+    """Devuelve los diccionarios de percepciones y deducciones mapeados por índice de columna (posición/letra Excel)."""
+    percepciones = {
+        'SUELDO': procesar_valor(fila_desglose.iloc[16]),
+        'VALES DE DESPENSA': procesar_valor(fila_desglose.iloc[19]),
+        'VACACIONES': procesar_valor(fila_desglose.iloc[23]),
+        'PRIMA VACACIONAL': procesar_valor(fila_desglose.iloc[25]),
+        'SUELDO ADEUDADO': procesar_valor(fila_desglose.iloc[21]),
+        'PRIMA DOMINICAL': procesar_valor(fila_desglose.iloc[27]),
+        'FESTIVO LABORADO': procesar_valor(fila_desglose.iloc[33]),
+        'DOMINGO LABORADO': procesar_valor(fila_desglose.iloc[29]),
+        'VIAJES ADICIONALES': procesar_valor(fila_desglose.iloc[37]),  # VIAJES ADICIONA.1
+        'SERVICIOS ESPECIALES': procesar_valor(fila_desglose.iloc[38]),
+        'SERVICIOS FIJOS': procesar_valor(fila_desglose.iloc[39]),
+        'BONO RENDIMIENTO': procesar_valor(fila_desglose.iloc[43]),
+        'COMPENSACION': procesar_valor(fila_desglose.iloc[44]),
+        'BONO DESEMPEÑO': procesar_valor(fila_desglose.iloc[47]),
+        'AYUDA FUNERARIA': procesar_valor(fila_desglose.iloc[66]),
+        'AYUDA ESCOLAR': procesar_valor(fila_desglose.iloc[65]),
+    }
+    deducciones = {
+        'FALTAS o PERMISOS SIN GOCE': procesar_valor(fila_desglose.iloc[84]),
+        'ISPT': procesar_valor(fila_desglose.iloc[92]),
+        'IMSS': procesar_valor(fila_desglose.iloc[95]),
+        'CUOTA SINDICAL': procesar_valor(fila_desglose.iloc[96]),
+        'INFONAVIT': procesar_valor(fila_desglose.iloc[97]),
+        'SEGURO INFONAVIT': procesar_valor(fila_desglose.iloc[98]),
+        'DIF INFONAVIT': procesar_valor(fila_desglose.iloc[99]),
+        'PENSION ALIMENTICIA': procesar_valor(fila_desglose.iloc[101]),
+        'FONACOT': procesar_valor(fila_desglose.iloc[103]),
+        'PRESTAMO PERSONAL': procesar_valor(fila_desglose.iloc[105]),
+        'ANOMALIAS': procesar_valor(fila_desglose.iloc[106]),
+        'COMBUSTIBLE': procesar_valor(fila_desglose.iloc[107]),
+        'TELEFONIA': procesar_valor(fila_desglose.iloc[108]),
+        'SINIESTROS': procesar_valor(fila_desglose.iloc[110]),
+        'PRESTAMO LICENCIA': procesar_valor(fila_desglose.iloc[112]),
+        'TAXIS': procesar_valor(fila_desglose.iloc[115]),
+        'REP. TARJETA': procesar_valor(fila_desglose.iloc[117]),
+    }
+    return percepciones, deducciones
+def mapear_percepciones_deducciones_por_indice(fila_desglose):
+    """Devuelve los diccionarios de percepciones y deducciones mapeados por índice de columna (posición/letra Excel)."""
+    percepciones = {
+        'SUELDO': procesar_valor(fila_desglose.iloc[16]),
+        'VALES DE DESPENSA': procesar_valor(fila_desglose.iloc[19]),
+        'VACACIONES': procesar_valor(fila_desglose.iloc[23]),
+        'PRIMA VACACIONAL': procesar_valor(fila_desglose.iloc[25]),
+        'SUELDO ADEUDADO': procesar_valor(fila_desglose.iloc[21]),
+        'PRIMA DOMINICAL': procesar_valor(fila_desglose.iloc[27]),
+        'FESTIVO LABORADO': procesar_valor(fila_desglose.iloc[33]),
+        'DOMINGO LABORADO': procesar_valor(fila_desglose.iloc[29]),
+        'VIAJES ADICIONALES': procesar_valor(fila_desglose.iloc[37]),  # VIAJES ADICIONA.1
+        'SERVICIOS ESPECIALES': procesar_valor(fila_desglose.iloc[38]),
+        'SERVICIOS FIJOS': procesar_valor(fila_desglose.iloc[39]),
+        'BONO RENDIMIENTO': procesar_valor(fila_desglose.iloc[43]),
+        'COMPENSACION': procesar_valor(fila_desglose.iloc[44]),
+        'BONO DESEMPEÑO': procesar_valor(fila_desglose.iloc[47]),
+        'AYUDA FUNERARIA': procesar_valor(fila_desglose.iloc[66]),
+        'AYUDA ESCOLAR': procesar_valor(fila_desglose.iloc[65]),
+    }
+    deducciones = {
+        'FALTAS o PERMISOS SIN GOCE': procesar_valor(fila_desglose.iloc[84]),
+        'ISPT': procesar_valor(fila_desglose.iloc[92]),
+        'IMSS': procesar_valor(fila_desglose.iloc[95]),
+        'CUOTA SINDICAL': procesar_valor(fila_desglose.iloc[96]),
+        'INFONAVIT': procesar_valor(fila_desglose.iloc[97]),
+        'SEGURO INFONAVIT': procesar_valor(fila_desglose.iloc[98]),
+        'DIF INFONAVIT': procesar_valor(fila_desglose.iloc[99]),
+        'PENSION ALIMENTICIA': procesar_valor(fila_desglose.iloc[101]),
+        'FONACOT': procesar_valor(fila_desglose.iloc[103]),
+        'PRESTAMO PERSONAL': procesar_valor(fila_desglose.iloc[105]),
+        'ANOMALIAS': procesar_valor(fila_desglose.iloc[106]),
+        'COMBUSTIBLE': procesar_valor(fila_desglose.iloc[107]),
+        'TELEFONIA': procesar_valor(fila_desglose.iloc[108]),
+        'SINIESTROS': procesar_valor(fila_desglose.iloc[110]),
+        'PRESTAMO LICENCIA': procesar_valor(fila_desglose.iloc[112]),
+        'TAXIS': procesar_valor(fila_desglose.iloc[115]),
+        'REP. TARJETA': procesar_valor(fila_desglose.iloc[117]),
+    }
+    return percepciones, deducciones

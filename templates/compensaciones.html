@@ -59,6 +59,13 @@
             <p class="text-center text-muted">Semana: {{ semana }}</p>
             {% endif %}
 
+            <!-- Información del operador -->
+            <div class="mb-4 text-center">
+                <h5 class="mb-1">Operador</h5>
+                <span class="d-block"><strong>Nombre:</strong> {{ datos['NOMBRE'] if 'NOMBRE' in datos else '' }}</span>
+                <span class="d-block"><strong>Nómina:</strong> {{ datos['NOMINA'] if 'NOMINA' in datos else '' }}</span>
+            </div>
+
             {% if nomina %}
             <div class="section">
                 <h2 class="section-title">Percepciones</h2>
@@ -70,13 +77,23 @@
                         </tr>
                     </thead>
                     <tbody>
-                        {% for concepto, valor in nomina.percepciones.items() %}
-                        {% if valor > 0 %}
+                        {% set percepciones_orden = [
+                            'SUELDO', 'VALES DE DESPENSA', 'VACACIONES', 'PRIMA VACACIONAL', 'SUELDO ADEUDADO',
+                            'PRIMA DOMINICAL', 'FESTIVO LABORADO', 'DOMINGO LABORADO', 'VIAJES ADICIONALES',
+                            'SERVICIOS ESPECIALES', 'SERVICIOS FIJOS', 'BONO RENDIMIENTO', 'COMPENSACION',
+                            'BONO DESEMPEÑO', 'AYUDA FUNERARIA', 'AYUDA ESCOLAR'] %}
+                        {% for concepto in percepciones_orden %}
                         <tr>
                             <td>{{ concepto }}</td>
-                            <td class="value-cell">${{ '{:,.2f}'.format(valor) }}</td>
+                            <td class="value-cell">
+                                {% set valor = nomina.percepciones.get(concepto, 0) %}
+                                {% if valor == 0 %}
+                                    $-
+                                {% else %}
+                                    ${{ '{:,.2f}'.format(valor) }}
+                                {% endif %}
+                            </td>
                         </tr>
-                        {% endif %}
                         {% endfor %}
                         <tr class="total-row">
                             <td>Total Percepciones</td>
@@ -96,13 +113,23 @@
                         </tr>
                     </thead>
                     <tbody>
-                        {% for concepto, valor in nomina.deducciones.items() %}
-                        {% if valor > 0 %}
+                        {% set deducciones_orden = [
+                            'FALTAS o PERMISOS SIN GOCE', 'ISPT', 'IMSS', 'CUOTA SINDICAL', 'INFONAVIT',
+                            'SEGURO INFONAVIT', 'DIF INFONAVIT', 'PENSION ALIMENTICIA', 'FONACOT',
+                            'PRESTAMO PERSONAL', 'ANOMALIAS', 'COMBUSTIBLE', 'TELEFONIA', 'SINIESTROS',
+                            'PRESTAMO LICENCIA', 'TAXIS', 'REP. TARJETA'] %}
+                        {% for concepto in deducciones_orden %}
                         <tr>
                             <td>{{ concepto }}</td>
-                            <td class="value-cell">${{ '{:,.2f}'.format(valor) }}</td>
+                            <td class="value-cell">
+                                {% set valor = nomina.deducciones.get(concepto, 0) %}
+                                {% if valor == 0 %}
+                                    $-
+                                {% else %}
+                                    ${{ '{:,.2f}'.format(valor) }}
+                                {% endif %}
+                            </td>
                         </tr>
-                        {% endif %}
                         {% endfor %}
                         <tr class="total-row">
                             <td>Total Deducciones</td>
@@ -135,17 +162,23 @@
                         </tr>
                     </thead>
                     <tbody>
+                        {% set tiene_compensaciones = false %}
                         {% for concepto, valor in datos.items() %}
-                        {% if concepto != 'NOMINA' and concepto != 'TOTAL' and valor != '' %}
+                        {% if concepto != 'NOMINA' and concepto != 'TOTAL' and valor not in ['', 0, None, '0', '0.0'] %}
+                        {% set tiene_compensaciones = true %}
                         <tr>
                             <td>{{ concepto }}</td>
-                            <td class="value-cell">{{ valor }}</td>
+                            <td class="value-cell">
+                                ${{ '{:,.2f}'.format(valor|float) if valor is not none and valor|string|length > 0 else '-' }}
+                            </td>
                         </tr>
                         {% endif %}
                         {% endfor %}
                         <tr class="total-row">
                             <td>Total Compensaciones</td>
-                            <td class="value-cell">{{ datos['TOTAL'] }}</td>
+                            <td class="value-cell">
+                                ${{ '{:,.2f}'.format(datos['TOTAL']|float) if 'TOTAL' in datos and datos['TOTAL'] not in ['', None] else '-' }}
+                            </td>
                         </tr>
                     </tbody>
                 </table>
