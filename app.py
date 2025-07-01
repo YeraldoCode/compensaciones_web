@@ -4,6 +4,7 @@ import pandas as pd
 import os
 import secrets
 from datetime import datetime
+import unicodedata
 
 app = Flask(__name__)
 
@@ -39,18 +40,83 @@ COMPENSACIONES = [
     'VUELTAS NO REGISTRADAS EN BUSTRAX', 'MONTO VUELTAS NO REGISTRADAS EN BUSTRAX'
 ]
 
+def normalizar_columna(nombre):
+    # Quita espacios, tildes y convierte a minúsculas
+    if not isinstance(nombre, str):
+        return ''
+    nombre = nombre.lower().replace(' ', '').replace('.', '').replace('$', '')
+    nombre = unicodedata.normalize('NFKD', nombre).encode('ascii', 'ignore').decode('utf-8')
+    return nombre
+
+# --- Mapeo directo por nombre de columna, con comentarios de columna Excel ---
+PERCEPCIONES_MAP = {
+    'SUELDO': ['SUELDO'],                        # Q
+    'VALES DESPENSA': ['VALES DESPENSA'],        # R
+    'SUELDO ADEUDADO': ['SUELDO ADEUDADO'],      # S
+    'VACACIONES': ['VACACIONES'],                # T
+    'PRIMA VAC.': ['PRIMA VAC.'],                # U
+    'PRIMA DOMINICAL': ['PRIMA DOMINICAL'],      # V
+    'DOMINGO LABORAD': ['DOMINGO LABORAD'],      # W
+    'VIAJES ADICIONA': ['VIAJES ADICIONA'],      # X
+    'SERVICIOS ESPEC': ['SERVICIOS ESPEC'],      # Y
+    'SERVICIOS FIJOS': ['SERVICIOS FIJOS'],      # Z
+    'BONO DE RENDIMI': ['BONO DE RENDIMI'],      # AA
+    'COMPENSACION': ['COMPENSACION'],            # AB
+    'BONO DESEMPEÑO': ['BONO DESEMPEÑO'],        # AC
+    'AYUDA ESCOLAR': ['AYUDA ESCOLAR'],          # AD
+    'AYUDA FUNERARIA': ['AYUDA FUNERARIA'],      # AE
+    'TOTAL PERCEP': ['TOTAL PERCEP']             # AF
+}
+
+DEDUCCIONES_MAP = {
+    'FALTAS': ['FALTAS'],                        # AG
+    'I.S.P.T.': ['I.S.P.T.'],                    # AH
+    'I.M.S.S.': ['I.M.S.S.'],                    # AI
+    'CUOTA SINDICAL': ['CUOTA SINDICAL'],        # AJ
+    'DESC. INFONAVIT': ['DESC. INFONAVIT'],      # AK
+    'SEG.DAÑOS VIV': ['SEG.DAÑOS VIV'],          # AL
+    'DIF. INFONAVIT': ['DIF. INFONAVIT'],        # AM
+    'PENSION ALIMENT': ['PENSION ALIMENT'],      # AN
+    'DESCTO. FONACOT': ['DESCTO. FONACOT'],      # AO
+    'PRESTAMO PERSON': ['PRESTAMO PERSON'],      # AP
+    'ANOMALIAS': ['ANOMALIAS'],                  # AQ
+    'COMBUSTIBLE': ['COMBUSTIBLE'],              # AR
+    'TELEFONIA': ['TELEFONIA'],                  # AS
+    'SINIESTROS': ['SINIESTROS'],                # AT
+    'PRESTAMO DE LIC': ['PRESTAMO DE LIC'],      # AU
+    'DESCUENTO TAXI': ['DESCUENTO TAXI'],        # AV
+    'REP. TARJETA': ['REP. TARJETA'],            # AW
+    'TOTAL DEDUCC': ['TOTAL DEDUCC'],            # AX
+    'NETO A PAGAR': ['NETO A PAGAR']             # AY
+}
+
 def procesar_valor(valor):
     if valor is None or valor == '' or str(valor).lower() == 'nan':
         return 0.0
     try:
+        # Si es un número (int, float, numpy int/float), conviértelo directo
         if isinstance(valor, (int, float)):
             return float(valor)
+        # Si es string, limpia y convierte
         if isinstance(valor, str):
             v_clean = valor.replace(',', '').replace('$', '').replace(' ', '')
-            return float(v_clean) if v_clean.replace('.', '', 1).replace('-', '', 1).isdigit() else 0.0
-        return 0.0
+            try:
+                return float(v_clean)
+            except Exception:
+                return 0.0
+        # Si es otro tipo (por ejemplo, numpy types), intenta forzar a float
+        try:
+            return float(valor)
+        except Exception:
+            return 0.0
     except Exception:
         return 0.0
+
+def get_valor_columna(fila, posibles_nombres):
+    for nombre in posibles_nombres:
+        if nombre in fila.index:
+            return procesar_valor(fila[nombre])
+    return 0.0
 
 def cargar_excel():
     global compensaciones_df, nomina_desglose_df
@@ -122,11 +188,21 @@ def compensaciones():
         fila_desglose = pd.DataFrame()
     if not fila_desglose.empty:
         fila_desglose = fila_desglose.iloc[0]
-        percepciones = {col: procesar_valor(fila_desglose.get(col, 0.0)) for col in PERCEPCIONES}
-        deducciones = {col: procesar_valor(fila_desglose.get(col, 0.0)) for col in DEDUCCIONES}
-        total_percepciones = procesar_valor(fila_desglose.get('TOTAL PERCEP', 0.0))
-        total_deducciones = procesar_valor(fila_desglose.get('TOTAL DEDUCC', 0.0))
-        neto_a_pagar = procesar_valor(fila_desglose.get('NETO A PAGAR', 0.0))
+        # Debug: mostrar valores crudos de cada columna relevante para la nómina seleccionada
+        print('--- VALORES CRUDOS DE LA FILA DE NOMINA ---')
+        for col in fila_desglose.index:
+            print(f"{col}: {fila_desglose[col]}")
+        print('--- VALORES QUE SE ENVIAN AL FRONTEND ---')
+        percepciones = {k: get_valor_columna(fila_desglose, v) for k, v in PERCEPCIONES_MAP.items()}
+        deducciones = {k: get_valor_columna(fila_desglose, v) for k, v in DEDUCCIONES_MAP.items()}
+        for k, v in percepciones.items():
+            print(f"Percepcion {k}: {v}")
+        for k, v in deducciones.items():
+            print(f"Deduccion {k}: {v}")
+        print('------------------------------------------')
+        total_percepciones = percepciones.get('TOTAL PERCEPCIONES', 0.0)
+        total_deducciones = deducciones.get('TOTAL DEDUCCIONES', 0.0)
+        neto_a_pagar = deducciones.get('NETO A PAGAR', 0.0)
         nomina_obj = type('Nomina', (), {})()
         nomina_obj.percepciones = percepciones
         nomina_obj.deducciones = deducciones
@@ -176,6 +252,68 @@ def modificar_archivo():
         except Exception:
             pass
     return render_template('modificar.html', ultimo_archivo=ultimo_archivo, ultima_semana=ultima_semana)
+
+
+@app.route('/compensaciones_json', methods=['POST'])
+def compensaciones_json():
+    nomina = request.form.get('nomina')
+    nombre = request.form.get('nombre')
+    semana = None
+    if os.path.exists(ULTIMA_ACTUALIZACION_PATH):
+        with open(ULTIMA_ACTUALIZACION_PATH, 'r', encoding='utf-8') as f:
+            semana = f.read().strip().split('|')[-1] if '|' in f.read() else None
+    if not nomina and not nombre:
+        return jsonify({"error": "Por favor, proporciona un número de nómina o un nombre completo para realizar la búsqueda."}), 400
+    datos = None
+    if nomina:
+        try:
+            nomina_int = int(nomina)
+            fila = compensaciones_df[compensaciones_df['NOMINA'] == nomina_int]
+        except Exception:
+            fila = pd.DataFrame()
+    elif nombre:
+        fila = compensaciones_df[compensaciones_df['NOMBRE'].str.contains(nombre, case=False, na=False)]
+    else:
+        fila = pd.DataFrame()
+    if not fila.empty:
+        datos = fila.iloc[0].to_dict()
+        total_comp = sum(
+            procesar_valor(v) for k, v in datos.items()
+            if k not in ['NOMINA', 'NOMBRE', 'TOTAL'] and isinstance(v, (int, float, str)) and str(v).strip() not in ['', 'nan', 'None']
+        )
+        datos['TOTAL'] = total_comp
+    else:
+        datos = {'NOMINA': int(nomina) if nomina else None}
+    nomina_obj = None
+    if nomina:
+        try:
+            nomina_int = int(nomina)
+            fila_desglose = nomina_desglose_df[nomina_desglose_df['clave.'] == nomina_int]
+        except Exception:
+            fila_desglose = pd.DataFrame()
+    elif nombre:
+        fila_desglose = nomina_desglose_df[nomina_desglose_df['nombre completo.'].str.contains(nombre, case=False, na=False)]
+    else:
+        fila_desglose = pd.DataFrame()
+    if not fila_desglose.empty:
+        fila_desglose = fila_desglose.iloc[0]
+        percepciones = {k: get_valor_columna(fila_desglose, v) for k, v in PERCEPCIONES_MAP.items()}
+        deducciones = {k: get_valor_columna(fila_desglose, v) for k, v in DEDUCCIONES_MAP.items()}
+        total_percepciones = percepciones.get('TOTAL PERCEPCIONES', 0.0)
+        total_deducciones = deducciones.get('TOTAL DEDUCCIONES', 0.0)
+        neto_a_pagar = deducciones.get('NETO A PAGAR', 0.0)
+        nomina_obj = {
+            "percepciones": percepciones,
+            "deducciones": deducciones,
+            "total_percepciones": total_percepciones,
+            "total_deducciones": total_deducciones,
+            "neto_a_pagar": neto_a_pagar
+        }
+    return jsonify({
+        "datos": datos,
+        "semana": semana,
+        "nomina": nomina_obj
+    })
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080, debug=True)

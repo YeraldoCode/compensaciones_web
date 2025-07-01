@@ -78,10 +78,10 @@
                     </thead>
                     <tbody>
                         {% set percepciones_orden = [
-                            'SUELDO', 'VALES DE DESPENSA', 'VACACIONES', 'PRIMA VACACIONAL', 'SUELDO ADEUDADO',
-                            'PRIMA DOMINICAL', 'FESTIVO LABORADO', 'DOMINGO LABORADO', 'VIAJES ADICIONALES',
-                            'SERVICIOS ESPECIALES', 'SERVICIOS FIJOS', 'BONO RENDIMIENTO', 'COMPENSACION',
-                            'BONO DESEMPEÑO', 'AYUDA FUNERARIA', 'AYUDA ESCOLAR'] %}
+                    'SUELDO', 'VALES DESPENSA', 'SUELDO ADEUDADO', 'VACACIONES', 'PRIMA VAC.',
+                    'PRIMA DOMINICAL', 'DOMINGO LABORAD', 'VIAJES ADICIONA', 'SERVICIOS ESPEC',
+                    'SERVICIOS FIJOS', 'BONO DE RENDIMI', 'COMPENSACION', 'BONO DESEMPEÑO',
+                    'AYUDA ESCOLAR', 'AYUDA FUNERARIA', 'TOTAL PERCEP'] %}
                         {% for concepto in percepciones_orden %}
                         <tr>
                             <td>{{ concepto }}</td>
@@ -95,10 +95,6 @@
                             </td>
                         </tr>
                         {% endfor %}
-                        <tr class="total-row">
-                            <td>Total Percepciones</td>
-                            <td class="value-cell">${{ '{:,.2f}'.format(nomina.total_percepciones) }}</td>
-                        </tr>
                     </tbody>
                 </table>
             </div>
@@ -114,10 +110,10 @@
                     </thead>
                     <tbody>
                         {% set deducciones_orden = [
-                            'FALTAS o PERMISOS SIN GOCE', 'ISPT', 'IMSS', 'CUOTA SINDICAL', 'INFONAVIT',
-                            'SEGURO INFONAVIT', 'DIF INFONAVIT', 'PENSION ALIMENTICIA', 'FONACOT',
-                            'PRESTAMO PERSONAL', 'ANOMALIAS', 'COMBUSTIBLE', 'TELEFONIA', 'SINIESTROS',
-                            'PRESTAMO LICENCIA', 'TAXIS', 'REP. TARJETA'] %}
+                            'FALTAS', 'I.S.P.T.', 'I.M.S.S.', 'CUOTA SINDICAL', 'DESC. INFONAVIT',
+                            'SEG.DAÑOS VIV', 'DIF. INFONAVIT', 'PENSION ALIMENT', 'DESCTO. FONACOT',
+                            'PRESTAMO PERSON', 'ANOMALIAS', 'COMBUSTIBLE', 'TELEFONIA', 'SINIESTROS',
+                            'PRESTAMO DE LIC', 'DESCUENTO TAXI', 'REP. TARJETA', 'TOTAL DEDUCC'] %}
                         {% for concepto in deducciones_orden %}
                         <tr>
                             <td>{{ concepto }}</td>
@@ -131,10 +127,6 @@
                             </td>
                         </tr>
                         {% endfor %}
-                        <tr class="total-row">
-                            <td>Total Deducciones</td>
-                            <td class="value-cell">${{ '{:,.2f}'.format(nomina.total_deducciones) }}</td>
-                        </tr>
                     </tbody>
                 </table>
             </div>
