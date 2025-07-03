@@ -1,5 +1,9 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
 20250703_155018_PLANTILLA_DESGLOSE_271.xlsx|27
 =======
 20250703_162954_PLANTILLA_DESGLOSE_272.xlsx
 >>>>>>> respaldo-semana27
+=======
+20250703_164225_PLANTILLA_DESGLOSE_272.xlsx
+>>>>>>> mi-rama-produccion
