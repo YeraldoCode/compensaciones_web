@@ -149,7 +149,11 @@ def compensaciones():
     semana = None
     if os.path.exists(ULTIMA_ACTUALIZACION_PATH):
         with open(ULTIMA_ACTUALIZACION_PATH, 'r', encoding='utf-8') as f:
-            semana = f.read().strip().split('|')[-1] if '|' in f.read() else None
+            contenido = f.read().strip()
+            if '|' in contenido:
+                semana = contenido.split('|')[-1]
+            else:
+                semana = None
     if not nomina and not nombre:
         return render_template('login_alert.html', error="Por favor, proporciona un número de nómina o un nombre completo para realizar la búsqueda.")
     # Buscar en compensaciones
@@ -238,9 +242,9 @@ def modificar_archivo():
             unique_filename = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{secure_filename(file.filename)}"
             file_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
             file.save(file_path)
-            # Registrar el último archivo subido
+            # Registrar el último archivo subido junto con la semana
             with open(ULTIMA_ACTUALIZACION_PATH, 'w', encoding='utf-8') as f:
-                f.write(unique_filename)
+                f.write(f"{unique_filename}|{semana}")
             flash('Archivo actualizado correctamente')
             cargar_excel()
             return redirect(url_for('modificar_archivo'))
@@ -248,7 +252,11 @@ def modificar_archivo():
     if os.path.exists(ULTIMA_ACTUALIZACION_PATH):
         try:
             with open(ULTIMA_ACTUALIZACION_PATH, 'r', encoding='utf-8') as f:
-                ultimo_archivo = f.read().strip()
+                contenido = f.read().strip()
+                if '|' in contenido:
+                    ultimo_archivo, ultima_semana = contenido.split('|', 1)
+                else:
+                    ultimo_archivo = contenido
         except Exception:
             pass
     return render_template('modificar.html', ultimo_archivo=ultimo_archivo, ultima_semana=ultima_semana)
